@@ -1,2 +1,2 @@
-# COMP66060
-A decentralised document signing system built on the Polygon network for MSc ACS Project at University of Manchester
+# Docu3
+A decentralised document signing system built on the Polygon networkk, developed as part of the MSc Advanced Computer Science project (COMP66060) at the University of Manchester.
