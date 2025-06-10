@@ -4,16 +4,16 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { Web3ProviderWrapper } from './context/Web3Context';
-import { BrowserRouter } from 'react-router-dom';
+import { NotificationProvider } from '@web3uikit/core';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
-      <Web3ProviderWrapper>
-        <App />
-      </Web3ProviderWrapper>
-    </BrowserRouter>
+     <NotificationProvider>
+        <Web3ProviderWrapper>
+          <App />
+        </Web3ProviderWrapper>
+      </NotificationProvider>
   </React.StrictMode>
 );
 
