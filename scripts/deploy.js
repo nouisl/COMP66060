@@ -4,9 +4,7 @@ async function main() {
   const DocumentSign = await hre.ethers.getContractFactory("DocumentSign");
   const documentSign = await DocumentSign.deploy();
 
-  await documentSign.deployed();
-
-  console.log("DocumentSign deployed to:", documentSign.address);
+  console.log("DocumentSign deployed to:", documentSign.target);
 }
 
 main().catch((error) => {
