@@ -13,10 +13,9 @@ function App() {
   return (
     <div className="App">
       <Router>
-            <Header />
-      <div className="min-h-screen flex flex-col">
-        <main className="flex-grow container mx-auto px-4 py-8">
-          
+        <Header />
+        <div className="min-h-screen flex flex-col">
+          <main className="flex-grow container mx-auto px-4 py-8">
             {/* Defining routes */}
             <Routes>
               <Route path="/" element={<Home />} />
@@ -25,10 +24,9 @@ function App() {
               <Route path="/register" element={<UserRegistration />} />
               <Route path="/profile" element={<UserProfile />} />
             </Routes>
-            <Footer />
-          
-        </main>
-      </div>
+          </main>
+        </div>
+        <Footer />
       </Router>
     </div>
   );
