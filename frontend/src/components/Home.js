@@ -1,6 +1,10 @@
 function Home() {
   return (
-    <></>
+    <>
+      <>
+        Hello
+      </>
+    </>
   );
 }
 
