@@ -8,21 +8,44 @@ contract DocumentSign {
         string ipfsHash;
         address creator;
         address[] signers;
-        mapping(address => Role) roles; // Per-document roles
+        mapping(address => Role) roles; 
         mapping(address => bool) hasSigned;
         mapping(address => uint256) signedAt;
         uint256 createdAt;
         uint256 signatures;
         bool isRevoked;
         bool exists;
+        uint256 expiry; 
     }
 
     mapping(uint256 => Document) private documents;
     uint256 public documentCount;
 
-    event DocumentCreated(uint256 indexed docId, string ipfsHash, address indexed creator, address[] signers, uint256 createdAt);
-    event DocumentSigned(uint256 indexed docId, address indexed signer, uint256 signedAt);
-    event DocumentRevoked(uint256 indexed docId, address indexed revoker, uint256 revokedAt);
+    event DocumentCreated(
+        uint256 indexed docId,
+        string ipfsHash,
+        address indexed creator,
+        address[] signers,
+        uint256 createdAt
+    );
+    event DocumentSigned(
+        uint256 indexed docId,
+        address indexed signer,
+        uint256 signedAt
+    );
+    event DocumentRevoked(
+        uint256 indexed docId,
+        address indexed revoker,
+        uint256 revokedAt,
+        string reason
+    );
+    event DocumentAmended(
+        uint256 indexed docId,
+        string newIpfsHash,
+        address indexed editor,
+        uint256 amendedAt
+    );
+    event DocumentExpired(uint256 indexed docId, uint256 expiredAt);
 
     modifier onlySigner(uint256 docId) {
         require(documents[docId].exists, "Document does not exist");
@@ -73,7 +96,7 @@ contract DocumentSign {
     function revokeDocument(uint256 _docId) external onlyOwner(_docId) notRevoked(_docId) {
         Document storage doc = documents[_docId];
         doc.isRevoked = true;
-        emit DocumentRevoked(_docId, msg.sender, block.timestamp);
+        emit DocumentRevoked(_docId, msg.sender, block.timestamp, "");
     }
 
     function hasSigned(uint256 _docId, address _signer) external view returns (bool) {
