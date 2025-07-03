@@ -5,6 +5,7 @@
     "hardhat": "^2.24.1"
   },
   "dependencies": {
+    "@pinata/sdk": "^2.1.0",
     "ethers": "^6.15.0",
     "ipfs-http-client": "^56.0.3"
   }
