@@ -15,7 +15,8 @@ contract DocumentSign {
         uint256 signatures;
         bool isRevoked;
         bool exists;
-        uint256 expiry; 
+        uint256 expiry;
+        uint256 currentSignerIndex;
     }
 
     mapping(uint256 => Document) private documents;
@@ -64,15 +65,17 @@ contract DocumentSign {
         _;
     }
 
-    function createDocument(string memory _ipfsHash, address[] memory _signers) external returns (uint256) {
+    function createDocument(string memory _ipfsHash, address[] memory _signers, uint256 _expiry) external returns (uint256) {
         require(bytes(_ipfsHash).length > 0, "IPFS hash required");
         require(_signers.length > 0, "At least one signer required");
+        require(_expiry == 0 || _expiry > block.timestamp, "Expiry must be in the future");
         documentCount++;
         Document storage doc = documents[documentCount];
         doc.ipfsHash = _ipfsHash;
         doc.creator = msg.sender;
         doc.createdAt = block.timestamp;
         doc.exists = true;
+        doc.expiry = _expiry;
         doc.roles[msg.sender] = Role.Owner;
         for (uint i = 0; i < _signers.length; i++) {
             require(_signers[i] != address(0), "Invalid signer address");
@@ -84,19 +87,27 @@ contract DocumentSign {
         return documentCount;
     }
 
+    function isExpired(uint256 _docId) public view returns (bool) {
+        Document storage doc = documents[_docId];
+        return doc.expiry != 0 && block.timestamp > doc.expiry;
+    }
+
     function signDocument(uint256 _docId) external onlySigner(_docId) notRevoked(_docId) {
         Document storage doc = documents[_docId];
+        require(!isExpired(_docId), "Document expired");
         require(!doc.hasSigned[msg.sender], "Already signed");
+        require(doc.signers[doc.currentSignerIndex] == msg.sender, "Not your turn to sign");
         doc.hasSigned[msg.sender] = true;
         doc.signedAt[msg.sender] = block.timestamp;
         doc.signatures++;
+        doc.currentSignerIndex++;
         emit DocumentSigned(_docId, msg.sender, block.timestamp);
     }
 
-    function revokeDocument(uint256 _docId) external onlyOwner(_docId) notRevoked(_docId) {
+    function revokeDocument(uint256 _docId, string memory _reason) external onlyOwner(_docId) notRevoked(_docId) {
         Document storage doc = documents[_docId];
         doc.isRevoked = true;
-        emit DocumentRevoked(_docId, msg.sender, block.timestamp, "");
+        emit DocumentRevoked(_docId, msg.sender, block.timestamp, _reason);
     }
 
     function hasSigned(uint256 _docId, address _signer) external view returns (bool) {
@@ -139,5 +150,36 @@ contract DocumentSign {
     function getRole(uint256 _docId, address _user) external view returns (Role) {
         require(documents[_docId].exists, "Document does not exist");
         return documents[_docId].roles[_user];
+    }
+
+    function amendDocument(uint256 _docId, string memory _newIpfsHash, uint256 _newExpiry) external onlyOwner(_docId) notRevoked(_docId) {
+        Document storage doc = documents[_docId];
+        require(!isExpired(_docId), "Document expired");
+        // Check not fully signed
+        bool allSigned = true;
+        for (uint i = 0; i < doc.signers.length; i++) {
+            if (!doc.hasSigned[doc.signers[i]]) {
+                allSigned = false;
+                break;
+            }
+        }
+        require(!allSigned, "Cannot amend fully signed document");
+        require(bytes(_newIpfsHash).length > 0, "IPFS hash required");
+        if (_newExpiry != 0) {
+            require(_newExpiry > block.timestamp, "Expiry must be in the future");
+            doc.expiry = _newExpiry;
+        }
+        doc.ipfsHash = _newIpfsHash;
+        emit DocumentAmended(_docId, _newIpfsHash, msg.sender, block.timestamp);
+    }
+
+    function getCurrentSigner(uint256 _docId) external view returns (address) {
+        Document storage doc = documents[_docId];
+        require(doc.exists, "Document does not exist");
+        if (doc.currentSignerIndex < doc.signers.length) {
+            return doc.signers[doc.currentSignerIndex];
+        } else {
+            return address(0); // All signed
+        }
     }
 } 
