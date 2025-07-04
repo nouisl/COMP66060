@@ -5,7 +5,10 @@
     "hardhat": "^2.24.1"
   },
   "dependencies": {
+    "@orbisclub/orbis-sdk": "^0.4.89",
     "@pinata/sdk": "^2.1.0",
-    "ethers": "^6.15.0"
+    "ethers": "^6.15.0",
+    "moralis": "^2.27.2",
+    "react-moralis": "^1.4.2"
   }
 }
