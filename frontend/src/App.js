@@ -11,21 +11,21 @@ import Footer from './components/Footer';
 // App component
 function App() {
   return (
-    <div className="App">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       <Router>
         <Header />
-        <div className="min-h-screen flex flex-col">
-          <main className="flex-grow container mx-auto px-4 py-8">
-            {/* Defining routes */}
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/upload" element={<DocumentUpload />} />
-              <Route path="/documents" element={<DocumentList />} />
-              <Route path="/register" element={<UserRegistration />} />
-              <Route path="/profile" element={<UserProfile />} />
-            </Routes>
-          </main>
-        </div>
+        <main className="flex-grow flex items-center justify-center">
+  
+              {/* routes */}
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/upload" element={<DocumentUpload />} />
+                <Route path="/documents" element={<DocumentList />} />
+                <Route path="/register" element={<UserRegistration />} />
+                <Route path="/profile" element={<UserProfile />} />
+              </Routes>
+            
+        </main>
         <Footer />
       </Router>
     </div>
