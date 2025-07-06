@@ -118,6 +118,73 @@ describe("DocumentSign", function () {
       expect(ts).to.be.gt(0);
     });
   });
+
+  describe("expiry and amendment", function () {
+    it("should create a document with expiry and prevent signing after expiry", async function () {
+      const signers = [signer1.address, signer2.address];
+      const now = Math.floor(Date.now() / 1000);
+      const tx = await documentSign.createDocument("QmHash", signers, now + 1);
+      const receipt = await tx.wait();
+      const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      await new Promise(res => setTimeout(res, 1500));
+      await expect(documentSign.connect(signer1).signDocument(docId)).to.be.revertedWith("Document expired");
+    });
+
+    it("should allow amendment before all signatures and prevent after all signed", async function () {
+      const signers = [signer1.address, signer2.address];
+      const tx = await documentSign.createDocument("QmHash", signers, 0);
+      const receipt = await tx.wait();
+      const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      await expect(documentSign.amendDocument(docId, "QmNewHash", 0))
+        .to.emit(documentSign, "DocumentAmended");
+      await documentSign.connect(signer1).signDocument(docId);
+      await expect(documentSign.amendDocument(docId, "QmAnotherHash", 0))
+        .to.emit(documentSign, "DocumentAmended");
+      await documentSign.connect(signer2).signDocument(docId);
+      await expect(documentSign.amendDocument(docId, "QmFail", 0)).to.be.revertedWith("Cannot amend fully signed document");
+    });
+  });
+
+  describe("sequential signing", function () {
+    let docId;
+    beforeEach(async function () {
+      const tx = await documentSign.createDocument("QmHash", [signer1.address, signer2.address], 0);
+      const receipt = await tx.wait();
+      docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+    });
+
+    it("should only allow the current signer to sign in order", async function () {
+      await expect(documentSign.connect(signer2).signDocument(docId)).to.be.revertedWith("Not your turn to sign");
+      await documentSign.connect(signer1).signDocument(docId);
+      await expect(documentSign.connect(signer1).signDocument(docId)).to.be.revertedWith("Already signed");
+      await documentSign.connect(signer2).signDocument(docId);
+    });
+
+    it("getCurrentSigner returns the correct address", async function () {
+      let current = await documentSign.getCurrentSigner(docId);
+      expect(current).to.equal(signer1.address);
+      await documentSign.connect(signer1).signDocument(docId);
+      current = await documentSign.getCurrentSigner(docId);
+      expect(current).to.equal(signer2.address);
+      await documentSign.connect(signer2).signDocument(docId);
+      current = await documentSign.getCurrentSigner(docId);
+      expect(current).to.equal(ethers.constants.AddressZero);
+    });
+
+    it("should enforce sequential signing for three signers", async function () {
+      const signers = [signer1.address, signer2.address, nonSigner.address];
+      const tx = await documentSign.createDocument("QmHash", signers, 0);
+      const receipt = await tx.wait();
+      const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      await expect(documentSign.connect(signer2).signDocument(docId)).to.be.revertedWith("Not your turn to sign");
+      await expect(documentSign.connect(nonSigner).signDocument(docId)).to.be.revertedWith("Not your turn to sign");
+      await documentSign.connect(signer1).signDocument(docId);
+      await expect(documentSign.connect(nonSigner).signDocument(docId)).to.be.revertedWith("Not your turn to sign");
+      await documentSign.connect(signer2).signDocument(docId);
+      await documentSign.connect(nonSigner).signDocument(docId);
+      await expect(documentSign.connect(signer1).signDocument(docId)).to.be.revertedWith("Already signed");
+    });
+  });
 });
 
 const anyValue = (v) => typeof v === "bigint" && v > 0; 
