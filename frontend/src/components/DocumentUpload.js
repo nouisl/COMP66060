@@ -15,7 +15,21 @@ function DocumentUpload() {
     e.preventDefault();
     setError('');
     setSuccess('');
-  
+    if (!selectedFile) {
+      setError('Please select a document file.');
+      return;
+    }
+
+    if (!title.trim()) {
+      setError('Please enter a document title.');
+      return;
+    }
+    for (let i = 0; i < signers.length; i++) {
+      if (!isValidAddress(signers[i])) {
+        setError(`Signer ${i + 1} is not a valid wallet address.`);
+        return;
+      }
+    }
     setSuccess('Form is valid! (Next: upload to IPFS and call contract)');
   };
 
