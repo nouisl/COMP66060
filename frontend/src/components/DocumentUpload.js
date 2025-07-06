@@ -9,7 +9,7 @@ function DocumentUpload() {
   const [signers, setSigners] = useState(['']);
   const [expiry, setExpiry] = useState('');
   const isValidAddress = (address) => /^0x[a-fA-F0-9]{40}$/.test(address);
-
+  const fileInputRef = useRef();
  
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -38,7 +38,18 @@ function DocumentUpload() {
     <div className="w-full max-w-2xl bg-white rounded-lg shadow-md p-8">
       <h1 className="text-2xl font-bold mb-6 text-gray-900">Upload Document</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
-  
+        {/* File Upload */}
+        <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Document File *</label>
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.txt"
+              onChange={handleFileChange}
+              ref={fileInputRef}
+              className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            />
+            {selectedFile && <div className="text-xs text-gray-500 mt-1">{selectedFile.name}</div>}
+          </div>
        
       </form>
     </div>
