@@ -94,6 +94,16 @@ function DocumentUpload() {
               <button type="button" onClick={addSigner} className="text-blue-600 hover:text-blue-800 text-xs mt-1">+ Add Signer</button>
             </div>
           </div>
+          {/* set expiry */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Expiry (optional)</label>
+            <input
+              type="datetime-local"
+              value={expiry}
+              onChange={e => setExpiry(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
       </form>
     </div>
   </div>
