@@ -38,7 +38,7 @@ function DocumentUpload() {
     <div className="w-full max-w-2xl bg-white rounded-lg shadow-md p-8">
       <h1 className="text-2xl font-bold mb-6 text-gray-900">Upload Document</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* File Upload */}
+        {/* file upload */}
         <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Document File *</label>
             <input
@@ -50,7 +50,18 @@ function DocumentUpload() {
             />
             {selectedFile && <div className="text-xs text-gray-500 mt-1">{selectedFile.name}</div>}
           </div>
-       
+          {/*  set document title */}
+          <div>
+            <label className="block text-sm text-gray-700 font-medium mb-2">Title *</label>
+            <input
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Enter document title "
+              required
+            />
+          </div>
       </form>
     </div>
   </div>
