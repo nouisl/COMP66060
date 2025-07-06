@@ -11,10 +11,10 @@ import Footer from './components/Footer';
 // App component
 function App() {
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <Router>
-        <Header />
-        <main className="flex-grow flex items-center justify-center">
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Router>
+          <Header />
+          <main className="flex-grow flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
   
               {/* routes */}
               <Routes>
