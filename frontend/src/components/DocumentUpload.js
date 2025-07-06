@@ -73,6 +73,27 @@ function DocumentUpload() {
               rows={2}
             />
           </div>
+          {/* set signers - multiple allowed */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Signers (wallet addresses) *</label>
+            <div className="space-y-2">
+              {signers.map((signer, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={signer}
+                    onChange={e => handleSignerChange(idx, e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-xs"
+                    placeholder="0x..."
+                  />
+                  {signers.length > 1 && (
+                    <button type="button" onClick={() => removeSigner(idx)} className="text-red-500 hover:text-red-700 text-xs">Remove</button>
+                  )}
+                </div>
+              ))}
+              <button type="button" onClick={addSigner} className="text-blue-600 hover:text-blue-800 text-xs mt-1">+ Add Signer</button>
+            </div>
+          </div>
       </form>
     </div>
   </div>
