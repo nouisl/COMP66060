@@ -62,6 +62,17 @@ function DocumentUpload() {
               required
             />
           </div>
+          {/* set document description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Short description (optional)"
+              rows={2}
+            />
+          </div>
       </form>
     </div>
   </div>
