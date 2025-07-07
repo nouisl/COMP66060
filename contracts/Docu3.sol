@@ -22,6 +22,16 @@ contract DocumentSign {
     mapping(uint256 => Document) private documents;
     uint256 public documentCount;
 
+    struct UserProfile {
+        string firstName;
+        string familyName;
+        string email;
+        uint256 dob; // store as Unix timestamp
+        bool isRegistered;
+    }
+
+    mapping(address => UserProfile) public profiles;
+
     event DocumentCreated(
         uint256 indexed docId,
         string ipfsHash,
@@ -47,6 +57,7 @@ contract DocumentSign {
         uint256 amendedAt
     );
     event DocumentExpired(uint256 indexed docId, uint256 expiredAt);
+    event UserRegistered(address indexed user, string firstName, string familyName, string email, uint256 dob);
 
     modifier onlySigner(uint256 docId) {
         require(documents[docId].exists, "Document does not exist");
@@ -181,5 +192,21 @@ contract DocumentSign {
         } else {
             return address(0); // All signed
         }
+    }
+
+    function registerUser(
+        string memory firstName,
+        string memory familyName,
+        string memory email,
+        uint256 dob
+    ) public {
+        require(!profiles[msg.sender].isRegistered, "Already registered");
+        profiles[msg.sender] = UserProfile(firstName, familyName, email, dob, true);
+        emit UserRegistered(msg.sender, firstName, familyName, email, dob);
+    }
+
+    function getUserProfile(address user) public view returns (UserProfile memory) {
+        require(profiles[user].isRegistered, "User not registered");
+        return profiles[user];
     }
 } 
