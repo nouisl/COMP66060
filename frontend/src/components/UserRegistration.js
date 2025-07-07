@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ethers } from 'ethers';
 import Docu3ABI from '../contracts/Docu3.json';
+import { useNotification } from '@web3uikit/core';
+import { useNavigate } from 'react-router-dom';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function UserRegistration() {
@@ -11,6 +13,8 @@ function UserRegistration() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const dispatch = useNotification();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26,8 +30,23 @@ function UserRegistration() {
       const tx = await contract.registerUser(firstName, familyName, email, dobTimestamp);
       await tx.wait();
       setSuccess('Profile registered successfully!');
+      dispatch({
+        type: 'success',
+        message: 'Profile registered successfully!',
+        title: 'Registration Complete',
+        position: 'topR',
+      });
+      setTimeout(() => {
+        navigate('/documents');
+      }, 1500);
     } catch (err) {
       setError(err.message || 'Registration failed.');
+      dispatch({
+        type: 'error',
+        message: err.message || 'Registration failed.',
+        title: 'Registration Error',
+        position: 'topR',
+      });
     } finally {
       setLoading(false);
     }
