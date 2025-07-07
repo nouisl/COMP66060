@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { ConnectButton } from '@web3uikit/web3';
+import { useMoralis } from 'react-moralis';
 
 function Header() {
+  const { account } = useMoralis();
   return (
     <header className="bg-white shadow-sm">
       <nav className="container mx-auto px-4">
@@ -17,9 +19,11 @@ function Header() {
               <Link to="/upload" className="px-3 py-2 rounded-md text-sm font-medium">
                 Upload
               </Link>
-              <Link to="/documents" className="px-3 py-2 rounded-md text-sm font-medium">
-                Documents
-              </Link>
+              {account && (
+                <Link to="/documents" className="px-3 py-2 rounded-md text-sm font-medium">
+                  Documents
+                </Link>
+              )}
             </div>
           </div>
           <div className="flex items-center space-x-4">
