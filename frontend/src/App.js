@@ -11,12 +11,12 @@ import { useMoralis } from 'react-moralis';
 import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
 import Docu3ABI from './contracts/Docu3.json'; 
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS; 
+const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 async function checkUserRegistered(account) {
   if (!window.ethereum || !account) return false;
   const provider = new ethers.BrowserProvider(window.ethereum);
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI.abi, provider);
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, provider);
   try {
     const profile = await contract.getUserProfile(account);
     return profile.isRegistered;
