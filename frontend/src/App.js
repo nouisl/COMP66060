@@ -2,14 +2,28 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Home from './components/Home';
 import UserRegistration from './components/UserRegistration';
-import UserProfile from './components/UserProfile.js';
+import UserProfile from './components/UserProfile';
 import DocumentUpload from './components/DocumentUpload';
 import DocumentList from './components/DocumentList';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import { useMoralis } from 'react-moralis';
 import { useEffect, useState } from 'react';
-import { getUserProfile } from './orbis/orbisService';
+import { ethers } from 'ethers';
+import Docu3ABI from './contracts/Docu3.json'; 
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS; 
+
+async function checkUserRegistered(account) {
+  if (!window.ethereum || !account) return false;
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI.abi, provider);
+  try {
+    const profile = await contract.getUserProfile(account);
+    return profile.isRegistered;
+  } catch {
+    return false;
+  }
+}
 
 function PrivateRoute({ children }) {
   const { account } = useMoralis();
@@ -19,12 +33,8 @@ function PrivateRoute({ children }) {
   useEffect(() => {
     const checkProfile = async () => {
       if (account) {
-        try {
-          const profile = await getUserProfile(account);
-          setIsRegistered(!!profile);
-        } catch {
-          setIsRegistered(false);
-        }
+        const registered = await checkUserRegistered(account);
+        setIsRegistered(registered);
       } else {
         setIsRegistered(false);
       }
@@ -34,7 +44,7 @@ function PrivateRoute({ children }) {
   }, [account]);
 
   if (!account) return <Navigate to="/register" replace />;
-  if (!profileChecked) return null; 
+  if (!profileChecked) return null;
   if (!isRegistered) return <Navigate to="/register" replace />;
   return children;
 }
@@ -48,14 +58,9 @@ function App() {
   useEffect(() => {
     const checkProfile = async () => {
       if (account) {
-        try {
-          const profile = await getUserProfile(account);
-          setIsRegistered(!!profile);
-          if (!profile) {
-            navigate('/register');
-          }
-        } catch {
-          setIsRegistered(false);
+        const registered = await checkUserRegistered(account);
+        setIsRegistered(registered);
+        if (!registered) {
           navigate('/register');
         }
       }
@@ -64,27 +69,20 @@ function App() {
     checkProfile();
   }, [account, navigate]);
 
-  if (!profileChecked) return null; 
+  if (!profileChecked) return null;
 
   return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <Router>
-          <Header />
-          <main className="flex-grow flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-  
-              {/* routes */}
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/upload" element={<PrivateRoute><DocumentUpload /></PrivateRoute>} />
-                <Route path="/documents" element={
-                  <PrivateRoute>
-                    <DocumentList />
-                  </PrivateRoute>
-                } />
-                <Route path="/register" element={<UserRegistration />} />
-                <Route path="/profile" element={<UserProfile />} />
-              </Routes>
-            
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Router>
+        <Header />
+        <main className="flex-grow flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/upload" element={<PrivateRoute><DocumentUpload /></PrivateRoute>} />
+            <Route path="/documents" element={<PrivateRoute><DocumentList /></PrivateRoute>} />
+            <Route path="/register" element={<UserRegistration />} />
+            <Route path="/profile" element={<UserProfile />} />
+          </Routes>
         </main>
         <Footer />
       </Router>
