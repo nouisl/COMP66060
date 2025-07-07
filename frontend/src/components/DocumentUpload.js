@@ -1,4 +1,6 @@
 import React, { useState, useRef } from 'react';
+import Docu3ABI from '../contracts/Docu3.json';
+import { ethers } from 'ethers';
 
 function DocumentUpload() {
   const [error, setError] = useState('');
@@ -10,13 +12,22 @@ function DocumentUpload() {
   const [expiry, setExpiry] = useState('');
   const isValidAddress = (address) => /^0x[a-fA-F0-9]{40}$/.test(address);
   const fileInputRef = useRef();
+  const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
  
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
-  
-    setSuccess('Form is valid! (Next: upload to IPFS and call contract)');
+    try {
+      if (!window.ethereum) throw new Error('No wallet found');
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, signer);
+
+      setSuccess('Form is valid! (Next: upload to IPFS and call contract)');
+    } catch (err) {
+      setError(err.message || 'Upload failed.');
+    }
   };
 
   const handleFileChange = (e) => {
@@ -33,6 +44,7 @@ function DocumentUpload() {
 
   const addSigner = () => setSigners([...signers, '']);
   const removeSigner = (idx) => setSigners(signers.filter((_, i) => i !== idx));
+
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4">
     <div className="w-full max-w-2xl bg-white rounded-lg shadow-md p-8">
