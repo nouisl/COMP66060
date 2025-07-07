@@ -1,5 +1,5 @@
 // import styles and components
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Home from './components/Home';
 import UserRegistration from './components/UserRegistration';
 import UserProfile from './components/UserProfile';
@@ -73,19 +73,17 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <Router>
-        <Header />
-        <main className="flex-grow flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/upload" element={<PrivateRoute><DocumentUpload /></PrivateRoute>} />
-            <Route path="/documents" element={<PrivateRoute><DocumentList /></PrivateRoute>} />
-            <Route path="/register" element={<UserRegistration />} />
-            <Route path="/profile" element={<UserProfile />} />
-          </Routes>
-        </main>
-        <Footer />
-      </Router>
+      <Header />
+      <main className="flex-grow flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/upload" element={<PrivateRoute><DocumentUpload /></PrivateRoute>} />
+          <Route path="/documents" element={<PrivateRoute><DocumentList /></PrivateRoute>} />
+          <Route path="/register" element={<UserRegistration />} />
+          <Route path="/profile" element={<UserProfile />} />
+        </Routes>
+      </main>
+      <Footer />
     </div>
   );
 }
