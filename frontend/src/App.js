@@ -74,7 +74,7 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
-      <main className="flex-grow flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+      <main className="flex-grow bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/upload" element={<PrivateRoute><DocumentUpload /></PrivateRoute>} />
