@@ -14,7 +14,7 @@ function Home() {
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
             The decentralized document signing platform built on Polygon. 
-            Secure, transparent, and immutable document management with IPFS storage.
+            Secure, transparent and immutable document management with IPFS storage.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             {account ? (
@@ -75,7 +75,7 @@ function Home() {
             </div>
             <h3 className="text-xl font-semibold mb-2">Audit Trail</h3>
             <p className="text-gray-600">
-              Complete audit trail with timestamps, amendments, and revocation history on the blockchain.
+              Complete audit trail with timestamps, amendments and revocation history on the blockchain.
             </p>
           </div>
         </div>
