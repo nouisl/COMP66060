@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import Docu3ABI from '../contracts/Docu3.json';
 import { ethers } from 'ethers';
+import { uploadFileToPinata } from '../utils/pinata';
 
 function DocumentUpload() {
   const [error, setError] = useState('');
@@ -20,11 +21,20 @@ function DocumentUpload() {
     setSuccess('');
     try {
       if (!window.ethereum) throw new Error('No wallet found');
+      if (!selectedFile) throw new Error('Please select a file to upload.');
+      // upload to Pinata
+      const ipfsHash = await uploadFileToPinata(selectedFile);
+      // prepare contract call
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, signer);
-
-      setSuccess('Form is valid! (Next: upload to IPFS and call contract)');
+      // prepare other data
+      const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
+      const validSigners = signers.filter(isValidAddress);
+      // call contract
+      const tx = await contract.createDocument(ipfsHash, validSigners, expiryTimestamp);
+      await tx.wait();
+      setSuccess('Document uploaded and contract called successfully!');
     } catch (err) {
       setError(err.message || 'Upload failed.');
     }
