@@ -1,11 +1,36 @@
 import { Link } from 'react-router-dom';
 import { ConnectButton } from '@web3uikit/web3';
 import { useMoralis } from 'react-moralis';
+import { useEffect, useState } from 'react';
+import { ethers } from 'ethers';
+import Docu3ABI from '../contracts/Docu3.json';
+const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function Header() {
   const { account } = useMoralis();
+  const [isRegistered, setIsRegistered] = useState(false);
+
+  useEffect(() => {
+    async function checkUserRegistered(account) {
+      if (!window.ethereum || !account) return false;
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, provider);
+      try {
+        const profile = await contract.getUserProfile(account);
+        return profile.isRegistered;
+      } catch {
+        return false;
+      }
+    }
+    if (account) {
+      checkUserRegistered(account).then(setIsRegistered);
+    } else {
+      setIsRegistered(false);
+    }
+  }, [account]);
+
   return (
-    <header className="bg-white shadow-sm">
+    <header className="bg-white shadow-sm sticky top-0 z-50">
       <nav className="container mx-auto px-4">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
@@ -16,23 +41,29 @@ function Header() {
               <Link to="/" className="px-3 py-2 rounded-md text-sm font-medium">
                 Home
               </Link>
-              <Link to="/upload" className="px-3 py-2 rounded-md text-sm font-medium">
-                Upload
-              </Link>
-              {account && (
-                <Link to="/documents" className="px-3 py-2 rounded-md text-sm font-medium">
-                  Documents
-                </Link>
+              {isRegistered && (
+                <>
+                  <Link to="/upload" className="px-3 py-2 rounded-md text-sm font-medium">
+                    Upload
+                  </Link>
+                  <Link to="/documents" className="px-3 py-2 rounded-md text-sm font-medium">
+                    Documents
+                  </Link>
+                </>
               )}
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <Link to="/profile" className="px-3 py-2 rounded-md text-sm font-medium">
-              Profile
-            </Link>
-            <Link to="/register" className="px-3 py-2 rounded-md text-sm font-medium">
-              Register
-            </Link>
+            {isRegistered && (
+              <Link to="/profile" className="px-3 py-2 rounded-md text-sm font-medium">
+                Profile
+              </Link>
+            )}
+            {!isRegistered && (
+              <Link to="/register" className="px-3 py-2 rounded-md text-sm font-medium">
+                Register
+              </Link>
+            )}
             <ConnectButton />
           </div>
         </div>
