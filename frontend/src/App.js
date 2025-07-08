@@ -5,6 +5,7 @@ import UserRegistration from './components/UserRegistration';
 import UserProfile from './components/UserProfile';
 import DocumentUpload from './components/DocumentUpload';
 import DocumentList from './components/DocumentList';
+import DocumentDetail from './components/DocumentDetail';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import { useMoralis } from 'react-moralis';
@@ -79,6 +80,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/upload" element={<PrivateRoute><DocumentUpload /></PrivateRoute>} />
           <Route path="/documents" element={<PrivateRoute><DocumentList /></PrivateRoute>} />
+          <Route path="/documents/:docId" element={<PrivateRoute><DocumentDetail /></PrivateRoute>} />
           <Route path="/register" element={<UserRegistration />} />
           <Route path="/profile" element={<UserProfile />} />
         </Routes>
