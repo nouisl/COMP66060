@@ -12,6 +12,7 @@ import { useMoralis } from 'react-moralis';
 import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
 import Docu3ABI from './contracts/Docu3.json'; 
+import Dashboard from './components/Dashboard';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 async function checkUserRegistered(account) {
@@ -83,6 +84,7 @@ function App() {
           <Route path="/documents/:docId" element={<PrivateRoute><DocumentDetail /></PrivateRoute>} />
           <Route path="/register" element={<UserRegistration />} />
           <Route path="/profile" element={<UserProfile />} />
+          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         </Routes>
       </main>
       <Footer />
