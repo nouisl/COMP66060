@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import Docu3ABI from '../contracts/Docu3.json';
 import { ethers } from 'ethers';
-import { uploadFileToPinata } from '../utils/pinata';
+import { uploadFileToPinata, uploadJsonToPinata } from '../utils/pinata';
+import { useNotification } from '@web3uikit/core';
 
 function DocumentUpload() {
   const [error, setError] = useState('');
@@ -14,6 +15,7 @@ function DocumentUpload() {
   const isValidAddress = (address) => /^0x[a-fA-F0-9]{40}$/.test(address);
   const fileInputRef = useRef();
   const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
+  const dispatch = useNotification();
  
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,21 +24,36 @@ function DocumentUpload() {
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
-      // upload to Pinata
-      const ipfsHash = await uploadFileToPinata(selectedFile);
-      // prepare contract call
+      const fileHash = await uploadFileToPinata(selectedFile);
+      const metadata = {
+        title,
+        description,
+        file: {
+          name: selectedFile.name,
+          ipfsHash: fileHash,
+        },
+      };
+      const metadataHash = await uploadJsonToPinata(metadata);
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, signer);
-      // prepare other data
       const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
       const validSigners = signers.filter(isValidAddress);
-      // call contract
-      const tx = await contract.createDocument(ipfsHash, validSigners, expiryTimestamp);
+      const tx = await contract.createDocument(metadataHash, validSigners, expiryTimestamp);
       await tx.wait();
-      setSuccess('Document uploaded and contract called successfully!');
+      dispatch({
+        type: 'success',
+        message: 'Document uploaded!',
+        title: 'Success',
+        position: 'topR',
+      });
     } catch (err) {
-      setError(err.message || 'Upload failed.');
+      dispatch({
+        type: 'error',
+        message: err.message || 'Upload failed.',
+        title: 'Error',
+        position: 'topR',
+      });
     }
   };
 
