@@ -53,7 +53,7 @@ function UserRegistration() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-0 px-4">
+    <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] px-4">
       <div className="w-full max-w-2xl bg-white rounded-lg shadow-md p-8 mx-auto">
         <h1 className="text-2xl font-bold mb-6 text-gray-900">Register</h1>
         <form onSubmit={handleSubmit} className="space-y-6">
