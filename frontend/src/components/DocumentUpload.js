@@ -46,7 +46,7 @@ function DocumentUpload() {
   const removeSigner = (idx) => setSigners(signers.filter((_, i) => i !== idx));
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4">
+    <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] px-4">
     <div className="w-full max-w-4xl bg-white rounded-lg shadow-md p-8 mx-auto">
       <h1 className="text-2xl font-bold mb-6 text-gray-900">Upload Document</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
