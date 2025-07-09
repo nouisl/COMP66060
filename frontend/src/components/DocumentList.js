@@ -12,7 +12,7 @@ function DocumentList() {
   const [error, setError] = useState('');
 
   async function fetchMetadata(ipfsHash) {
-    const url = `https://ipfs.io/ipfs/${ipfsHash}`;
+    const url = `https://ipfs.io/ipfs/${ipfsHash}/metadata.json`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch metadata from IPFS');
     return await res.json();
@@ -36,7 +36,8 @@ function DocumentList() {
             let metadata = {};
             try {
               metadata = await fetchMetadata(doc.ipfsHash);
-            } catch (e) {}
+            } catch (e) {
+            }
             docs.push({ ...doc, ...metadata, docId: i });
           }
         }
@@ -75,7 +76,9 @@ function DocumentList() {
               <tr key={doc.docId}>
                 <td className="py-2 px-4 border-b">{doc.docId}</td>
                 <td className="py-2 px-4 border-b">{doc.title || <span className="text-gray-400 italic">N/A</span>}</td>
-                <td className="py-2 px-4 border-b">{doc.file && doc.file.ipfsHash ? `${doc.file.ipfsHash.slice(0, 8)}...${doc.file.ipfsHash.slice(-4)}` : <span className="text-gray-400 italic">N/A</span>}</td>
+                <td className="py-2 px-4 border-b">
+                  {doc.ipfsHash ? `${doc.ipfsHash.slice(0, 8)}...${doc.ipfsHash.slice(-4)}` : <span className="text-gray-400 italic">N/A</span>}
+                </td>
                 <td className="py-2 px-4 border-b">{doc.creator}</td>
                 <td className="py-2 px-4 border-b">{doc.fullySigned ? 'Signed' : doc.isRevoked ? 'Revoked' : 'Pending'}</td>
                 <td className="py-2 px-4 border-b">
