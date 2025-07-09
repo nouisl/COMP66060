@@ -30,3 +30,26 @@ export async function uploadJsonToPinata(json) {
   });
   return res.data.IpfsHash;
 }
+
+export async function uploadFolderToPinata(files) {
+  const url = `https://api.pinata.cloud/pinning/pinFileToIPFS`;
+  const data = new FormData();
+  files.forEach(fileObj => {
+    data.append('file', fileObj.content, fileObj.path);
+  });
+  try {
+    const res = await axios.post(url, data, {
+      maxContentLength: 'Infinity',
+      headers: {
+        pinata_api_key: PINATA_API_KEY,
+        pinata_secret_api_key: PINATA_SECRET_API_KEY,
+      },
+    });
+    return res.data.IpfsHash;
+  } catch (err) {
+    if (err.response) {
+      alert('Pinata error: ' + JSON.stringify(err.response.data));
+    }
+    throw err;
+  }
+}
