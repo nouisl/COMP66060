@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import Docu3ABI from '../contracts/Docu3.json';
 import { ethers } from 'ethers';
-import { uploadFileToPinata, uploadJsonToPinata } from '../utils/pinata';
+import { uploadFolderToPinata } from '../utils/pinata';
 import { useNotification } from '@web3uikit/core';
 
 function DocumentUpload() {
@@ -23,26 +23,35 @@ function DocumentUpload() {
     setError('');
     setSuccess('');
     setUploading(true);
-    let fileHash = null;
+    let dirHash = null;
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
-      fileHash = await uploadFileToPinata(selectedFile);
+      const fileExt = selectedFile.name.split('.').pop().toLowerCase();
+      if (!fileExt || fileExt === selectedFile.name) {
+        throw new Error('File must have a valid extension');
+      }
+      const filePath = 'document.' + fileExt;
       const metadata = {
         title,
         description,
         file: {
           name: selectedFile.name,
-          ipfsHash: fileHash,
+          path: filePath, 
         },
       };
-      const metadataHash = await uploadJsonToPinata(metadata);
+      const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
+      const files = [
+        { path: filePath, content: selectedFile },
+        { path: 'metadata.json', content: metadataBlob },
+      ];
+      dirHash = await uploadFolderToPinata(files);
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, signer);
       const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
       const validSigners = signers.filter(isValidAddress);
-      const tx = await contract.createDocument(metadataHash, validSigners, expiryTimestamp);
+      const tx = await contract.createDocument(dirHash, validSigners, expiryTimestamp);
       await tx.wait();
       dispatch({
         type: 'success',
@@ -58,10 +67,10 @@ function DocumentUpload() {
           title: 'Transaction Rejected',
           position: 'topR',
         });
-      } else if (fileHash) {
+      } else if (dirHash) {
         dispatch({
           type: 'error',
-          message: `File uploaded to IPFS (hash: ${fileHash}) but contract call failed. You can retry or remove the file from Pinata if needed.`,
+          message: `Folder uploaded to IPFS (hash: ${dirHash}) but contract call failed. You can retry or remove the folder from Pinata if needed.`,
           title: 'Partial Upload',
           position: 'topR',
         });
