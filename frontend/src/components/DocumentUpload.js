@@ -12,6 +12,7 @@ function DocumentUpload() {
   const [description, setDescription] = useState('');
   const [signers, setSigners] = useState(['']);
   const [expiry, setExpiry] = useState('');
+  const [uploading, setUploading] = useState(false);
   const isValidAddress = (address) => /^0x[a-fA-F0-9]{40}$/.test(address);
   const fileInputRef = useRef();
   const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
@@ -21,10 +22,12 @@ function DocumentUpload() {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setUploading(true);
+    let fileHash = null;
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
-      const fileHash = await uploadFileToPinata(selectedFile);
+      fileHash = await uploadFileToPinata(selectedFile);
       const metadata = {
         title,
         description,
@@ -43,17 +46,35 @@ function DocumentUpload() {
       await tx.wait();
       dispatch({
         type: 'success',
-        message: 'Document uploaded!',
+        message: 'Document uploaded and registered on-chain!',
         title: 'Success',
         position: 'topR',
       });
     } catch (err) {
-      dispatch({
-        type: 'error',
-        message: err.message || 'Upload failed.',
-        title: 'Error',
-        position: 'topR',
-      });
+      if (err.code === 4001 || (err.message && err.message.toLowerCase().includes('user denied'))) {
+        dispatch({
+          type: 'error',
+          message: 'You rejected the transaction in MetaMask.',
+          title: 'Transaction Rejected',
+          position: 'topR',
+        });
+      } else if (fileHash) {
+        dispatch({
+          type: 'error',
+          message: `File uploaded to IPFS (hash: ${fileHash}) but contract call failed. You can retry or remove the file from Pinata if needed.`,
+          title: 'Partial Upload',
+          position: 'topR',
+        });
+      } else {
+        dispatch({
+          type: 'error',
+          message: err.message || 'Upload failed.',
+          title: 'Error',
+          position: 'topR',
+        });
+      }
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -150,8 +171,9 @@ function DocumentUpload() {
           <button
             type="submit"
             className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+            disabled={uploading}
           >
-            Upload Document
+            {uploading ? 'Uploading...' : 'Upload Document'}
           </button>
       </form>
     </div>
