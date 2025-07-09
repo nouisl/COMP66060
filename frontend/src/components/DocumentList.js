@@ -11,6 +11,13 @@ function DocumentList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  async function fetchMetadata(ipfsHash) {
+    const url = `https://ipfs.io/ipfs/${ipfsHash}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to fetch metadata from IPFS');
+    return await res.json();
+  }
+
   useEffect(() => {
     async function fetchDocuments() {
       setLoading(true);
@@ -26,7 +33,11 @@ function DocumentList() {
           const isSigner = doc.signers && doc.signers.map(addr => addr.toLowerCase()).includes(account?.toLowerCase());
           const isCreator = doc.creator && doc.creator.toLowerCase() === account?.toLowerCase();
           if (isSigner || isCreator) {
-            docs.push({ ...doc, docId: i });
+            let metadata = {};
+            try {
+              metadata = await fetchMetadata(doc.ipfsHash);
+            } catch (e) {}
+            docs.push({ ...doc, ...metadata, docId: i });
           }
         }
         setDocuments(docs);
@@ -52,7 +63,8 @@ function DocumentList() {
           <thead>
             <tr>
               <th className="py-2 px-4 border-b">ID</th>
-              <th className="py-2 px-4 border-b">IPFS Hash</th>
+              <th className="py-2 px-4 border-b">Title</th>
+              <th className="py-2 px-4 border-b">File Hash</th>
               <th className="py-2 px-4 border-b">Creator</th>
               <th className="py-2 px-4 border-b">Status</th>
               <th className="py-2 px-4 border-b">Action</th>
@@ -62,7 +74,8 @@ function DocumentList() {
             {documents.map(doc => (
               <tr key={doc.docId}>
                 <td className="py-2 px-4 border-b">{doc.docId}</td>
-                <td className="py-2 px-4 border-b">{doc.ipfsHash.slice(0, 8)}...{doc.ipfsHash.slice(-4)}</td>
+                <td className="py-2 px-4 border-b">{doc.title || <span className="text-gray-400 italic">N/A</span>}</td>
+                <td className="py-2 px-4 border-b">{doc.file && doc.file.ipfsHash ? `${doc.file.ipfsHash.slice(0, 8)}...${doc.file.ipfsHash.slice(-4)}` : <span className="text-gray-400 italic">N/A</span>}</td>
                 <td className="py-2 px-4 border-b">{doc.creator}</td>
                 <td className="py-2 px-4 border-b">{doc.fullySigned ? 'Signed' : doc.isRevoked ? 'Revoked' : 'Pending'}</td>
                 <td className="py-2 px-4 border-b">
