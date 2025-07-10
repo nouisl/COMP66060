@@ -28,9 +28,11 @@ contract DocumentSign {
         string email;
         uint256 dob; // store as Unix timestamp
         bool isRegistered;
+        string publicKey;
     }
 
     mapping(address => UserProfile) public profiles;
+    address[] public registeredUsers;
 
     event DocumentCreated(
         uint256 indexed docId,
@@ -57,7 +59,7 @@ contract DocumentSign {
         uint256 amendedAt
     );
     event DocumentExpired(uint256 indexed docId, uint256 expiredAt);
-    event UserRegistered(address indexed user, string firstName, string familyName, string email, uint256 dob);
+    event UserRegistered(address indexed user, string firstName, string familyName, string email, uint256 dob, string publicKey);
 
     modifier onlySigner(uint256 docId) {
         require(documents[docId].exists, "Document does not exist");
@@ -198,15 +200,29 @@ contract DocumentSign {
         string memory firstName,
         string memory familyName,
         string memory email,
-        uint256 dob
+        uint256 dob,
+        string memory publicKey
     ) public {
         require(!profiles[msg.sender].isRegistered, "Already registered");
-        profiles[msg.sender] = UserProfile(firstName, familyName, email, dob, true);
-        emit UserRegistered(msg.sender, firstName, familyName, email, dob);
+        profiles[msg.sender] = UserProfile(firstName, familyName, email, dob, true, publicKey);
+        registeredUsers.push(msg.sender);
+        emit UserRegistered(msg.sender, firstName, familyName, email, dob, publicKey);
     }
 
-    function getUserProfile(address user) public view returns (UserProfile memory) {
+    function getUserProfile(address user) public view returns (
+        string memory firstName,
+        string memory familyName,
+        string memory email,
+        uint256 dob,
+        bool isRegistered,
+        string memory publicKey
+    ) {
         require(profiles[user].isRegistered, "User not registered");
-        return profiles[user];
+        UserProfile storage p = profiles[user];
+        return (p.firstName, p.familyName, p.email, p.dob, p.isRegistered, p.publicKey);
+    }
+
+    function getAllRegisteredUsers() public view returns (address[] memory) {
+        return registeredUsers;
     }
 } 
