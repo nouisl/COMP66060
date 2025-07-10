@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { useMoralis } from 'react-moralis';
-import Docu3ABI from '../contracts/Docu3.json';
+import Docu3 from '../contracts/Docu3.json';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function Dashboard() {
@@ -20,7 +20,7 @@ function Dashboard() {
       if (!account) return;
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, provider);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
         const count = await contract.documentCount();
         
         let totalDocs = 0;

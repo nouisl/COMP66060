@@ -3,7 +3,7 @@ import { ConnectButton } from '@web3uikit/web3';
 import { useMoralis } from 'react-moralis';
 import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
-import Docu3ABI from '../contracts/Docu3.json';
+import Docu3 from '../contracts/Docu3.json';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function Header() {
@@ -14,7 +14,7 @@ function Header() {
     async function checkUserRegistered(account) {
       if (!window.ethereum || !account) return false;
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, provider);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
       try {
         const profile = await contract.getUserProfile(account);
         return profile.isRegistered;
