@@ -34,8 +34,9 @@ export async function uploadJsonToPinata(json) {
 export async function uploadFolderToPinata(files) {
   const url = `https://api.pinata.cloud/pinning/pinFileToIPFS`;
   const data = new FormData();
+  const rootFolder = 'docdir'; 
   files.forEach(fileObj => {
-    data.append('file', fileObj.content, fileObj.path);
+    data.append('file', fileObj.content, `${rootFolder}/${fileObj.path}`);
   });
   try {
     const res = await axios.post(url, data, {
