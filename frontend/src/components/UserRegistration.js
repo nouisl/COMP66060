@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ethers } from 'ethers';
-import Docu3ABI from '../contracts/Docu3.json';
+import Docu3 from '../contracts/Docu3.json';
 import { useNotification } from '@web3uikit/core';
 import { useNavigate } from 'react-router-dom';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
@@ -25,9 +25,13 @@ function UserRegistration() {
       if (!window.ethereum) throw new Error('No wallet found');
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, signer);
+      const message = 'Register for Docu³';
+      const signature = await signer.signMessage(message);
+      const hash = ethers.hashMessage(message);
+      const recoveredPublicKey = ethers.SigningKey.recoverPublicKey(hash, signature);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const dobTimestamp = Math.floor(new Date(dob).getTime() / 1000);
-      const tx = await contract.registerUser(firstName, familyName, email, dobTimestamp);
+      const tx = await contract.registerUser(firstName, familyName, email, dobTimestamp, recoveredPublicKey);
       await tx.wait();
       setSuccess('Profile registered successfully!');
       dispatch({
@@ -37,7 +41,7 @@ function UserRegistration() {
         position: 'topR',
       });
       setTimeout(() => {
-        navigate('/dashboard');
+        window.location.replace('/dashboard');
       }, 1500);
     } catch (err) {
       setError(err.message || 'Registration failed.');

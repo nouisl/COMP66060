@@ -1,8 +1,10 @@
-import React, { useState, useRef } from 'react';
-import Docu3ABI from '../contracts/Docu3.json';
+import React, { useState, useRef, useEffect } from 'react';
+import Docu3 from '../contracts/Docu3.json';
 import { ethers } from 'ethers';
 import { uploadFolderToPinata } from '../utils/pinata';
 import { useNotification } from '@web3uikit/core';
+import CryptoJS from 'crypto-js';
+import EthCrypto from 'eth-crypto';
 
 function DocumentUpload() {
   const [error, setError] = useState('');
@@ -10,14 +12,32 @@ function DocumentUpload() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [signers, setSigners] = useState(['']);
+  const [signers, setSigners] = useState([{ email: '', error: '', address: '' }]);
+  const [registeredUsers, setRegisteredUsers] = useState([]);
   const [expiry, setExpiry] = useState('');
   const [uploading, setUploading] = useState(false);
-  const isValidAddress = (address) => /^0x[a-fA-F0-9]{40}$/.test(address);
   const fileInputRef = useRef();
   const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
   const dispatch = useNotification();
  
+  useEffect(() => {
+    async function fetchRegisteredUsers() {
+      if (!window.ethereum) return;
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
+      const addresses = await contract.getAllRegisteredUsers();
+      const users = [];
+      for (let addr of addresses) {
+        const [firstName, familyName, email, dob, isRegistered, publicKey] = await contract.getUserProfile(addr);
+        if (isRegistered && publicKey && publicKey.length > 66) {
+          users.push({ address: addr, firstName, familyName, email: email.toLowerCase(), publicKey });
+        }
+      }
+      setRegisteredUsers(users);
+    }
+    fetchRegisteredUsers();
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -27,30 +47,53 @@ function DocumentUpload() {
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
+      // Validate all signers
+      for (let i = 0; i < signers.length; i++) {
+        if (!signers[i].address) {
+          throw new Error(`Signer ${i + 1}: ${signers[i].email} is not a registered user.`);
+        }
+      }
       const fileExt = selectedFile.name.split('.').pop().toLowerCase();
       if (!fileExt || fileExt === selectedFile.name) {
         throw new Error('File must have a valid extension');
       }
       const filePath = 'document.' + fileExt;
+      const symmetricKey = CryptoJS.lib.WordArray.random(32).toString();
+      const fileBuffer = await selectedFile.arrayBuffer();
+      const wordArray = CryptoJS.lib.WordArray.create(fileBuffer);
+      const encrypted = CryptoJS.AES.encrypt(wordArray, symmetricKey).toString();
+      const encryptedFileBlob = new Blob([encrypted], { type: 'text/plain' });
+      const encryptedKeys = {};
+      for (let i = 0; i < signers.length; i++) {
+        const user = registeredUsers.find(u => u.address === signers[i].address);
+        const publicKey = user.publicKey;
+        if (!publicKey || publicKey.length < 66) {
+          throw new Error(`Missing or invalid public key for signer ${signers[i].email}`);
+        }
+        const encryptedSymmetricKey = await EthCrypto.encryptWithPublicKey(publicKey, symmetricKey);
+        encryptedKeys[signers[i].address] = EthCrypto.cipher.stringify(encryptedSymmetricKey);
+      }
       const metadata = {
         title,
         description,
         file: {
           name: selectedFile.name,
-          path: filePath, 
+          path: filePath,
+          encrypted: true,
         },
+        encryptedKeys, 
       };
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
       const files = [
-        { path: filePath, content: selectedFile },
+        { path: filePath, content: encryptedFileBlob }, 
         { path: 'metadata.json', content: metadataBlob },
       ];
       dirHash = await uploadFolderToPinata(files);
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, signer);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
-      const validSigners = signers.filter(isValidAddress);
+      const validSigners = signers.map(s => s.address);
       const tx = await contract.createDocument(dirHash, validSigners, expiryTimestamp);
       await tx.wait();
       dispatch({
@@ -93,14 +136,30 @@ function DocumentUpload() {
     setSuccess('');
   };
 
-  const handleSignerChange = (idx, value) => {
+  const handleSignerEmailChange = (idx, email) => {
     const updated = [...signers];
-    updated[idx] = value;
+    const user = registeredUsers.find(u => u.email === email.toLowerCase());
+    if (user) {
+      updated[idx] = { email, error: '', address: user.address };
+    } else {
+      updated[idx] = { email, error: 'No registered user with this email', address: '' };
+    }
     setSigners(updated);
   };
+  const addSigner = () => {
+    setSigners([...signers, { email: '', error: '', address: '' }]);
+  };
+  const removeSigner = (idx) => {
+    setSigners(signers.filter((_, i) => i !== idx));
+  };
 
-  const addSigner = () => setSigners([...signers, '']);
-  const removeSigner = (idx) => setSigners(signers.filter((_, i) => i !== idx));
+  const isFormValid = () => {
+    if (!selectedFile || !title.trim() || signers.length === 0) return false;
+    for (let s of signers) {
+      if (!s.email.trim() || s.error || !s.address) return false;
+    }
+    return true;
+  };
 
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] px-4">
@@ -144,20 +203,22 @@ function DocumentUpload() {
           </div>
           {/* set signers - multiple allowed */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Signers (wallet addresses) *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Signers (enter registered user email) *</label>
             <div className="space-y-2">
               {signers.map((signer, idx) => (
-                <div key={idx} className="flex gap-2 items-center">
+                <div key={idx} className="flex flex-row gap-2 items-center">
                   <input
-                    type="text"
-                    value={signer}
-                    onChange={e => handleSignerChange(idx, e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-xs"
-                    placeholder="0x..."
+                    type="email"
+                    value={signer.email}
+                    onChange={e => handleSignerEmailChange(idx, e.target.value)}
+                    className={`flex-1 px-3 py-2 border ${signer.error ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-xs`}
+                    placeholder="Enter registered user's email"
+                    required
                   />
                   {signers.length > 1 && (
                     <button type="button" onClick={() => removeSigner(idx)} className="text-red-500 hover:text-red-700 text-xs">Remove</button>
                   )}
+                  {signer.error && <span className="text-red-500 text-xs ml-2">{signer.error}</span>}
                 </div>
               ))}
               <button type="button" onClick={addSigner} className="text-blue-600 hover:text-blue-800 text-xs mt-1">+ Add Signer</button>
@@ -179,8 +240,11 @@ function DocumentUpload() {
           {/* submit button */}
           <button
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-            disabled={uploading}
+            className={`w-full px-6 py-3 rounded-lg font-semibold transition-colors 
+              ${uploading || !isFormValid() 
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+            disabled={uploading || !isFormValid()}
           >
             {uploading ? 'Uploading...' : 'Upload Document'}
           </button>

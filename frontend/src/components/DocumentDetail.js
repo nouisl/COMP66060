@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { ethers } from 'ethers';
-import Docu3ABI from '../contracts/Docu3.json';
+import Docu3 from '../contracts/Docu3.json';
 import { uploadFolderToPinata } from '../utils/pinata';
+import CryptoJS from 'crypto-js';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function DocumentDetail() {
@@ -22,6 +23,9 @@ function DocumentDetail() {
   const [amendDescription, setAmendDescription] = useState('');
   const [amendFile, setAmendFile] = useState(null);
   const [showAmendForm, setShowAmendForm] = useState(false);
+  const [decryptedFileUrl, setDecryptedFileUrl] = useState(null);
+  const [decrypting, setDecrypting] = useState(false);
+  const [decryptionError, setDecryptionError] = useState('');
 
   useEffect(() => {
     async function fetchDoc() {
@@ -33,11 +37,15 @@ function DocumentDetail() {
         const signer = await provider.getSigner();
         const userAddress = await signer.getAddress();
         setAccount(userAddress);
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, provider);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
         const docData = await contract.getDocument(docId);
         setDoc(docData);
+        let metaRes;
         try {
-          const metaRes = await fetch(`https://ipfs.io/ipfs/${docData.ipfsHash}/metadata.json`);
+          metaRes = await fetch(`https://ipfs.io/ipfs/${docData.ipfsHash}/docdir/metadata.json`);
+          if (!metaRes.ok) {
+            metaRes = await fetch(`https://cloudflare-ipfs.com/ipfs/${docData.ipfsHash}/docdir/metadata.json`);
+          }
           if (metaRes.ok) {
             const meta = await metaRes.json();
             setMetadata(meta);
@@ -68,7 +76,7 @@ function DocumentDetail() {
       if (!window.ethereum) throw new Error('No wallet found');
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, signer);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const tx = await contract.signDocument(docId);
       await tx.wait();
       setSuccess('Document signed successfully!');
@@ -85,7 +93,7 @@ function DocumentDetail() {
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, signer);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const tx = await contract.revokeDocument(docId, "Revoked by creator");
       await tx.wait();
       setSuccess('Document revoked!');
@@ -123,7 +131,7 @@ function DocumentDetail() {
       
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, signer);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const tx = await contract.amendDocument(docId, newDirHash, doc.expiry);
       await tx.wait();
       setSuccess('Document amended!');
@@ -131,6 +139,41 @@ function DocumentDetail() {
       setError(err.message || 'Failed to amend.');
     } finally {
       setAmending(false);
+    }
+  };
+
+  // Decryption is not handled in-browser for security. Only registered signers can view if not encrypted.
+
+  const handleDecryptAndView = async () => {
+    setDecrypting(true);
+    setDecryptionError('');
+    try {
+      if (!window.ethereum) throw new Error('No wallet found');
+      if (!metadata?.file?.encrypted) throw new Error('File is not encrypted.');
+      const encryptedKey = metadata.encryptedKeys[account.toLowerCase()];
+      if (!encryptedKey) throw new Error('No encrypted key found for your address.');
+      // Use MetaMask eth_decrypt to decrypt the symmetric key
+      const decryptedSymmetricKey = await window.ethereum.request({
+        method: 'eth_decrypt',
+        params: [encryptedKey, account],
+      });
+      // Fetch the encrypted file from IPFS
+      const fileRes = await fetch(`https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`);
+      const encryptedFileText = await fileRes.text();
+      // Decrypt the file
+      const decrypted = CryptoJS.AES.decrypt(encryptedFileText, decryptedSymmetricKey);
+      const decryptedWordArray = decrypted;
+      const decryptedBytes = new Uint8Array(decryptedWordArray.sigBytes);
+      for (let i = 0; i < decryptedWordArray.sigBytes; i++) {
+        decryptedBytes[i] = (decryptedWordArray.words[Math.floor(i / 4)] >> (24 - 8 * (i % 4))) & 0xff;
+      }
+      const blob = new Blob([decryptedBytes], { type: metadata.file.path.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      setDecryptedFileUrl(url);
+    } catch (err) {
+      setDecryptionError(err.message || 'Failed to decrypt.');
+    } finally {
+      setDecrypting(false);
     }
   };
 
@@ -168,9 +211,30 @@ function DocumentDetail() {
       <div className="mb-6">
         <strong>Document:</strong>
         <div className="mt-4">
-          {metadata?.file?.path && metadata.file.path.endsWith('.pdf') ? (
+          {metadata?.file?.encrypted ? (
+            isCurrentSigner ? (
+              <div>
+                <button
+                  onClick={handleDecryptAndView}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mb-4"
+                  disabled={decrypting}
+                >
+                  {decrypting ? 'Decrypting...' : 'Decrypt & View Document'}
+                </button>
+                {decryptionError && <div className="text-red-600 mb-2">{decryptionError}</div>}
+                {decryptedFileUrl && metadata.file.path.endsWith('.pdf') && (
+                  <iframe src={decryptedFileUrl} width="100%" height="600px" title="Decrypted Document" className="border rounded" />
+                )}
+                {decryptedFileUrl && !metadata.file.path.endsWith('.pdf') && (
+                  <a href={decryptedFileUrl} download={metadata.file.name} className="text-blue-600 underline">Download Decrypted File</a>
+                )}
+              </div>
+            ) : (
+              <span className="text-gray-500 italic">This document is encrypted. Only registered signers can decrypt and view it using their wallet.</span>
+            )
+          ) : metadata?.file?.path && metadata.file.path.endsWith('.pdf') ? (
             <iframe
-              src={`https://ipfs.io/ipfs/${doc.ipfsHash}/${metadata.file.path}`}
+              src={`https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`}
               width="100%"
               height="600px"
               title="Document PDF"
@@ -178,7 +242,7 @@ function DocumentDetail() {
             />
           ) : metadata?.file?.path ? (
             <img
-              src={`https://ipfs.io/ipfs/${doc.ipfsHash}/${metadata.file.path}`}
+              src={`https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`}
               alt="Document"
               className="max-w-full max-h-[600px] rounded border"
               onError={(e) => { e.target.style.display = 'none'; }}
