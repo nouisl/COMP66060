@@ -51,6 +51,29 @@ function PrivateRoute({ children }) {
   return children;
 }
 
+function PublicOnlyRoute({ children }) {
+  const { account } = useMoralis();
+  const [profileChecked, setProfileChecked] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
+
+  useEffect(() => {
+    const checkProfile = async () => {
+      if (account) {
+        const registered = await checkUserRegistered(account);
+        setIsRegistered(registered);
+      } else {
+        setIsRegistered(false);
+      }
+      setProfileChecked(true);
+    };
+    checkProfile();
+  }, [account]);
+
+  if (!profileChecked) return null;
+  if (isRegistered) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
 function App() {
   const { account } = useMoralis();
   const [profileChecked, setProfileChecked] = useState(false);
@@ -82,9 +105,9 @@ function App() {
           <Route path="/upload" element={<PrivateRoute><DocumentUpload /></PrivateRoute>} />
           <Route path="/documents" element={<PrivateRoute><DocumentList /></PrivateRoute>} />
           <Route path="/documents/:docId" element={<PrivateRoute><DocumentDetail /></PrivateRoute>} />
-          <Route path="/register" element={<UserRegistration />} />
+          <Route path="/register" element={<PublicOnlyRoute><UserRegistration /></PublicOnlyRoute>} />
           <Route path="/profile" element={<UserProfile />} />
-          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </main>
       <Footer />
