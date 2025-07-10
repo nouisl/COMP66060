@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { useMoralis } from 'react-moralis';
-import Docu3ABI from '../contracts/Docu3.json';
+import Docu3 from '../contracts/Docu3.json';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function DocumentList() {
@@ -12,7 +12,7 @@ function DocumentList() {
   const [error, setError] = useState('');
 
   async function fetchMetadata(ipfsHash) {
-    const url = `https://ipfs.io/ipfs/${ipfsHash}/metadata.json`;
+    const url = `https://ipfs.io/ipfs/${ipfsHash}/docdir/metadata.json`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch metadata from IPFS');
     return await res.json();
@@ -25,7 +25,7 @@ function DocumentList() {
       try {
         if (!window.ethereum) throw new Error('No wallet found');
         const provider = new ethers.BrowserProvider(window.ethereum);
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, provider);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
         const count = await contract.documentCount();
         const docs = [];
         for (let i = 1; i <= count; i++) {
