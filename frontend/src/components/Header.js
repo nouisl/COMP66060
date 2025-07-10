@@ -38,11 +38,11 @@ function Header() {
               Docu³
             </Link>
             <div className="hidden md:flex space-x-4">
-              <Link to="/" className="px-3 py-2 rounded-md text-sm font-medium">
-                Home
-              </Link>
               {isRegistered && (
                 <>
+                  <Link to="/dashboard" className="px-3 py-2 rounded-md text-sm font-medium">
+                    Dashboard
+                  </Link>
                   <Link to="/upload" className="px-3 py-2 rounded-md text-sm font-medium">
                     Upload
                   </Link>

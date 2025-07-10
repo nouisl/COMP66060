@@ -37,7 +37,7 @@ function UserRegistration() {
         position: 'topR',
       });
       setTimeout(() => {
-        navigate('/documents');
+        navigate('/dashboard');
       }, 1500);
     } catch (err) {
       setError(err.message || 'Registration failed.');
