@@ -3,17 +3,9 @@ import Docu3 from '../contracts/Docu3.json';
 import { ethers } from 'ethers';
 import { uploadFolderToPinata } from '../utils/pinata';
 import { useNotification } from '@web3uikit/core';
-<<<<<<< Updated upstream
-import CryptoJS from 'crypto-js';
-import EthCrypto from 'eth-crypto';
-=======
-<<<<<<< Updated upstream
-=======
 import CryptoJS from 'crypto-js';
 import EthCrypto from 'eth-crypto';
 import { generateDocumentHash } from '../utils/crypto';
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 
 function DocumentUpload() {
   const [error, setError] = useState('');
@@ -28,12 +20,7 @@ function DocumentUpload() {
   const fileInputRef = useRef();
   const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
   const dispatch = useNotification();
- 
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
+
   useEffect(() => {
     async function fetchRegisteredUsers() {
       if (!window.ethereum) return;
@@ -42,11 +29,7 @@ function DocumentUpload() {
       const addresses = await contract.getAllRegisteredUsers();
       const users = [];
       for (let addr of addresses) {
-<<<<<<< Updated upstream
-        const [firstName, familyName, email, dob, isRegistered, publicKey] = await contract.getUserProfile(addr);
-=======
         const [firstName, familyName, email, , isRegistered, publicKey] = await contract.getUserProfile(addr);
->>>>>>> Stashed changes
         if (isRegistered && publicKey && publicKey.length > 66) {
           users.push({ address: addr, firstName, familyName, email: email.toLowerCase(), publicKey });
         }
@@ -54,14 +37,8 @@ function DocumentUpload() {
       setRegisteredUsers(users);
     }
     fetchRegisteredUsers();
-<<<<<<< Updated upstream
-  }, []);
-
-=======
   }, [CONTRACT_ADDRESS]);
 
->>>>>>> Stashed changes
->>>>>>> Stashed changes
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -71,27 +48,25 @@ function DocumentUpload() {
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
-      // Validate all signers
+      
       for (let i = 0; i < signers.length; i++) {
         if (!signers[i].address) {
           throw new Error(`Signer ${i + 1}: ${signers[i].email} is not a registered user.`);
         }
       }
+      
       const fileExt = selectedFile.name.split('.').pop().toLowerCase();
       if (!fileExt || fileExt === selectedFile.name) {
         throw new Error('File must have a valid extension');
       }
+      
       const filePath = 'document.' + fileExt;
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
       const symmetricKey = CryptoJS.lib.WordArray.random(32).toString();
       const fileBuffer = await selectedFile.arrayBuffer();
       const wordArray = CryptoJS.lib.WordArray.create(fileBuffer);
       const encrypted = CryptoJS.AES.encrypt(wordArray, symmetricKey).toString();
       const encryptedFileBlob = new Blob([encrypted], { type: 'text/plain' });
+      
       const encryptedKeys = {};
       for (let i = 0; i < signers.length; i++) {
         const user = registeredUsers.find(u => u.address === signers[i].address);
@@ -102,12 +77,9 @@ function DocumentUpload() {
         const encryptedSymmetricKey = await EthCrypto.encryptWithPublicKey(publicKey, symmetricKey);
         encryptedKeys[signers[i].address] = EthCrypto.cipher.stringify(encryptedSymmetricKey);
       }
-<<<<<<< Updated upstream
-=======
+      
       const documentHash = await generateDocumentHash(selectedFile, null);
       
->>>>>>> Stashed changes
->>>>>>> Stashed changes
       const metadata = {
         title,
         description,
@@ -116,21 +88,16 @@ function DocumentUpload() {
           path: filePath,
           encrypted: true,
         },
-<<<<<<< Updated upstream
-        encryptedKeys, 
-=======
-<<<<<<< Updated upstream
-=======
         documentHash,
         encryptedKeys, 
->>>>>>> Stashed changes
->>>>>>> Stashed changes
       };
+      
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
       const files = [
         { path: filePath, content: encryptedFileBlob }, 
         { path: 'metadata.json', content: metadataBlob },
       ];
+      
       dirHash = await uploadFolderToPinata(files);
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
@@ -139,6 +106,7 @@ function DocumentUpload() {
       const validSigners = signers.map(s => s.address);
       const tx = await contract.createDocument(dirHash, validSigners, expiryTimestamp);
       await tx.wait();
+      
       dispatch({
         type: 'success',
         message: 'Document uploaded and registered on-chain!',
@@ -189,9 +157,11 @@ function DocumentUpload() {
     }
     setSigners(updated);
   };
+  
   const addSigner = () => {
     setSigners([...signers, { email: '', error: '', address: '' }]);
   };
+  
   const removeSigner = (idx) => {
     setSigners(signers.filter((_, i) => i !== idx));
   };
@@ -209,7 +179,6 @@ function DocumentUpload() {
     <div className="w-full max-w-4xl bg-white rounded-lg shadow-md p-8 mx-auto">
       <h1 className="text-2xl font-bold mb-6 text-gray-900">Upload Document</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* file upload */}
         <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Document File *</label>
             <input
@@ -221,7 +190,6 @@ function DocumentUpload() {
             />
             {selectedFile && <div className="text-xs text-gray-500 mt-1">{selectedFile.name}</div>}
           </div>
-          {/*  set document title */}
           <div>
             <label className="block text-sm text-gray-700 font-medium mb-2">Title *</label>
             <input
@@ -233,7 +201,6 @@ function DocumentUpload() {
               required
             />
           </div>
-          {/* set document description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
             <textarea
@@ -244,7 +211,6 @@ function DocumentUpload() {
               rows={2}
             />
           </div>
-          {/* set signers - multiple allowed */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Signers (enter registered user email) *</label>
             <div className="space-y-2">
@@ -267,7 +233,6 @@ function DocumentUpload() {
               <button type="button" onClick={addSigner} className="text-blue-600 hover:text-blue-800 text-xs mt-1">+ Add Signer</button>
             </div>
           </div>
-          {/* set expiry */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Expiry (optional)</label>
             <input
@@ -277,10 +242,8 @@ function DocumentUpload() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          {/* error or success */}
           {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded mb-2">{error}</div>}
           {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded mb-2">{success}</div>}
-          {/* submit button */}
           <button
             type="submit"
             className={`w-full px-6 py-3 rounded-lg font-semibold transition-colors 

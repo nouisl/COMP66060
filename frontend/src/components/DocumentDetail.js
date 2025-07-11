@@ -3,11 +3,6 @@ import { useParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 import Docu3 from '../contracts/Docu3.json';
 import { uploadFolderToPinata } from '../utils/pinata';
-<<<<<<< Updated upstream
-import CryptoJS from 'crypto-js';
-=======
-<<<<<<< Updated upstream
-=======
 import CryptoJS from 'crypto-js';
 import { useNotification } from '@web3uikit/core';
 import { 
@@ -17,8 +12,7 @@ import {
   formatSignature,
   createVerificationMessage 
 } from '../utils/crypto';
->>>>>>> Stashed changes
->>>>>>> Stashed changes
+
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function DocumentDetail() {
@@ -26,26 +20,19 @@ function DocumentDetail() {
   const dispatch = useNotification();
   const [doc, setDoc] = useState(null);
   const [metadata, setMetadata] = useState(null);
+  const [account, setAccount] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [signing, setSigning] = useState(false);
   const [success, setSuccess] = useState('');
-  const [account, setAccount] = useState('');
-  const [isCurrentSigner, setIsCurrentSigner] = useState(false);
   const [hasSigned, setHasSigned] = useState(false);
+  const [isCurrentSigner, setIsCurrentSigner] = useState(false);
+  const [signing, setSigning] = useState(false);
   const [amending, setAmending] = useState(false);
   const [revoking, setRevoking] = useState(false);
   const [amendTitle, setAmendTitle] = useState('');
   const [amendDescription, setAmendDescription] = useState('');
   const [amendFile, setAmendFile] = useState(null);
   const [showAmendForm, setShowAmendForm] = useState(false);
-<<<<<<< Updated upstream
-  const [decryptedFileUrl, setDecryptedFileUrl] = useState(null);
-  const [decrypting, setDecrypting] = useState(false);
-  const [decryptionError, setDecryptionError] = useState('');
-=======
-<<<<<<< Updated upstream
-=======
   const [decryptedFileUrl, setDecryptedFileUrl] = useState(null);
   const [decrypting, setDecrypting] = useState(false);
   const [decryptionError, setDecryptionError] = useState('');
@@ -54,8 +41,6 @@ function DocumentDetail() {
   const [signatureVerification, setSignatureVerification] = useState({});
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [signatureLoading, setSignatureLoading] = useState(false);
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 
   useEffect(() => {
     async function fetchDoc() {
@@ -121,7 +106,7 @@ function DocumentDetail() {
       }
     }
     fetchDoc();
-  }, [docId]);
+  }, [docId, dispatch]);
 
   const handleSign = async () => {
     setSigning(true);
@@ -136,14 +121,6 @@ function DocumentDetail() {
       
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-<<<<<<< Updated upstream
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
-=======
-<<<<<<< Updated upstream
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, signer);
->>>>>>> Stashed changes
-      const tx = await contract.signDocument(docId);
-=======
       
       let hashToSign = documentHash;
       if (!hashToSign && metadata?.documentHash) {
@@ -156,7 +133,6 @@ function DocumentDetail() {
       
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const tx = await contract.signDocument(docId, signature);
->>>>>>> Stashed changes
       await tx.wait();
       
       setSuccess('Document cryptographically signed successfully!');
@@ -234,23 +210,13 @@ function DocumentDetail() {
         },
       };
       const metadataBlob = new Blob([JSON.stringify(newMetadata)], { type: 'application/json' });
-      
-      const files = [
-        { path: 'metadata.json', content: metadataBlob },
-      ];
-      
-      if (amendFile) {
-        const fileExt = amendFile.name.split('.').pop();
-        const filePath = 'document.' + fileExt;
-        files.push({ path: filePath, content: amendFile });
-      }
-      
-      const newDirHash = await uploadFolderToPinata(files);
+      const files = [{ path: 'metadata.json', content: metadataBlob }];
+      const newIpfsHash = await uploadFolderToPinata(files);
       
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
-      const tx = await contract.amendDocument(docId, newDirHash, doc.expiry);
+      const tx = await contract.amendDocument(docId, newIpfsHash, 0);
       await tx.wait();
       setSuccess('Document amended!');
       dispatch({
@@ -259,6 +225,7 @@ function DocumentDetail() {
         title: 'Success',
         position: 'topR',
       });
+      setShowAmendForm(false);
     } catch (err) {
       const errorMessage = err.message || 'Failed to amend.';
       setError(errorMessage);
@@ -273,43 +240,35 @@ function DocumentDetail() {
     }
   };
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
-  // Decryption is not handled in-browser for security. Only registered signers can view if not encrypted.
-
-  const handleDecryptAndView = async () => {
+  const handleDecrypt = async () => {
     setDecrypting(true);
     setDecryptionError('');
     try {
-      if (!window.ethereum) throw new Error('No wallet found');
-      if (!metadata?.file?.encrypted) throw new Error('File is not encrypted.');
-      const encryptedKey = metadata.encryptedKeys[account.toLowerCase()];
-      if (!encryptedKey) throw new Error('No encrypted key found for your address.');
-      // Use MetaMask eth_decrypt to decrypt the symmetric key
-      const decryptedSymmetricKey = await window.ethereum.request({
-        method: 'eth_decrypt',
-        params: [encryptedKey, account],
-      });
-      // Fetch the encrypted file from IPFS
-      const fileRes = await fetch(`https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`);
-      const encryptedFileText = await fileRes.text();
-      // Decrypt the file
-      const decrypted = CryptoJS.AES.decrypt(encryptedFileText, decryptedSymmetricKey);
-      const decryptedWordArray = decrypted;
-      const decryptedBytes = new Uint8Array(decryptedWordArray.sigBytes);
-      for (let i = 0; i < decryptedWordArray.sigBytes; i++) {
-        decryptedBytes[i] = (decryptedWordArray.words[Math.floor(i / 4)] >> (24 - 8 * (i % 4))) & 0xff;
+      if (!metadata?.encryptedKeys?.[account]) {
+        throw new Error('No encrypted key found for your account');
       }
-      const blob = new Blob([decryptedBytes], { type: metadata.file.path.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream' });
+      
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const privateKey = await signer.provider.send('eth_getEncryptionPublicKey', [account]);
+      
+      const encryptedKey = metadata.encryptedKeys[account];
+      const decryptedKey = await window.ethereum.request({
+        method: 'eth_decrypt',
+        params: [encryptedKey, account]
+      });
+      
+      const fileRes = await fetch(`https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`);
+      if (!fileRes.ok) throw new Error('Failed to fetch encrypted file');
+      const encryptedContent = await fileRes.text();
+      
+      const decrypted = CryptoJS.AES.decrypt(encryptedContent, decryptedKey);
+      const decryptedArray = decrypted.toString(CryptoJS.enc.Utf8);
+      
+      const blob = new Blob([decryptedArray], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       setDecryptedFileUrl(url);
     } catch (err) {
-<<<<<<< Updated upstream
-      setDecryptionError(err.message || 'Failed to decrypt.');
-=======
       const errorMessage = err.message || 'Failed to decrypt.';
       setDecryptionError(errorMessage);
       dispatch({
@@ -318,240 +277,203 @@ function DocumentDetail() {
         title: 'Decryption Error',
         position: 'topR',
       });
->>>>>>> Stashed changes
     } finally {
       setDecrypting(false);
     }
   };
 
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
->>>>>>> Stashed changes
+  const copyVerificationDetails = async (signerAddress, signature) => {
+    try {
+      const message = createVerificationMessage(documentHash, signerAddress, signature);
+      await navigator.clipboard.writeText(message);
+      setSuccess('Verification details copied to clipboard!');
+      dispatch({
+        type: 'success',
+        message: 'Verification details copied to clipboard!',
+        title: 'Success',
+        position: 'topR',
+      });
+    } catch (err) {
+      setError('Failed to copy to clipboard');
+    }
+  };
+
   if (loading) return <div className="text-center py-8">Loading document...</div>;
   if (error) return <div className="text-center text-red-600 py-8">{error}</div>;
-  if (!doc) return null;
+  if (!doc) return <div className="text-center py-8">Document not found</div>;
 
   return (
-    <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-md p-8 mt-8">
-      <h2 className="text-2xl font-bold mb-4 text-gray-900">{metadata?.title || 'Document Details'}</h2>
-      <div className="mb-4">
-        <strong>Description:</strong> {metadata?.description || <span className="text-gray-400 italic">N/A</span>}
-      </div>
-      <div className="mb-4">
-        <strong>IPFS Directory Hash:</strong> {doc?.ipfsHash}
-      </div>
-      <div className="mb-4">
-        <strong>File Path:</strong> {metadata?.file?.path || <span className="text-gray-400 italic">N/A</span>}
-      </div>
-      <div className="mb-4">
-        <strong>Creator:</strong> {doc?.creator}
-      </div>
-      <div className="mb-4">
-        <strong>Signers:</strong> {doc?.signers && doc.signers.join(', ')}
-      </div>
-      <div className="mb-4">
-        <strong>Created At:</strong> {doc?.createdAt && new Date(Number(doc.createdAt) * 1000).toLocaleString()}
-      </div>
-      <div className="mb-4">
-        <strong>Fully Signed:</strong> {doc?.fullySigned ? 'Yes' : 'No'}
-      </div>
-      <div className="mb-4">
-        <strong>Revoked:</strong> {doc?.isRevoked ? 'Yes' : 'No'}
-      </div>
-      <div className="mb-6">
-        <strong>Document:</strong>
-        <div className="mt-4">
-          {metadata?.file?.encrypted ? (
-            isCurrentSigner ? (
-              <div>
-                <button
-                  onClick={handleDecryptAndView}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mb-4"
-                  disabled={decrypting}
-                >
-                  {decrypting ? 'Decrypting...' : 'Decrypt & View Document'}
-                </button>
-                {decryptionError && <div className="text-red-600 mb-2">{decryptionError}</div>}
-                {decryptedFileUrl && metadata.file.path.endsWith('.pdf') && (
-                  <iframe src={decryptedFileUrl} width="100%" height="600px" title="Decrypted Document" className="border rounded" />
-                )}
-                {decryptedFileUrl && !metadata.file.path.endsWith('.pdf') && (
-                  <a href={decryptedFileUrl} download={metadata.file.name} className="text-blue-600 underline">Download Decrypted File</a>
-                )}
-              </div>
-            ) : (
-              <span className="text-gray-500 italic">This document is encrypted. Only registered signers can decrypt and view it using their wallet.</span>
-            )
-          ) : metadata?.file?.path && metadata.file.path.endsWith('.pdf') ? (
-            <iframe
-              src={`https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`}
-              width="100%"
-              height="600px"
-              title="Document PDF"
-              className="border rounded"
-            />
-          ) : metadata?.file?.path ? (
-            <img
-              src={`https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`}
-              alt="Document"
-              className="max-w-full max-h-[600px] rounded border"
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-          ) : (
-            <span className="text-gray-400 italic">No document available</span>
-          )}
-        </div>
-      </div>
-      {isCurrentSigner && !hasSigned && !doc.isRevoked && !doc.fullySigned && (
-        <button
-          onClick={handleSign}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-          disabled={signing}
-        >
-          {signing ? 'Signing...' : 'Sign Document'}
-        </button>
-      )}
-      {hasSigned && <div className="text-green-600 mt-4">You have signed this document.</div>}
-      {success && <div className="text-green-600 mt-4">{success}</div>}
-      {error && <div className="text-red-600 mt-4">{error}</div>}
+    <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-8 mt-8">
+      <h2 className="text-2xl font-bold mb-6 text-gray-900">Document Details</h2>
       
-      {documentHash && (
-        <div className="mt-6 p-4 border rounded-lg bg-gray-50">
-          <h3 className="text-lg font-semibold mb-4">Document Hash & Signatures</h3>
-          <div className="mb-4">
-            <strong>Document Hash:</strong>
-            <div className="font-mono text-sm bg-white p-2 rounded border mt-1 break-all">
-              {documentHash}
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <h3 className="text-lg font-semibold mb-4">Document Information</h3>
+          <div className="space-y-2">
+            <p><strong>Document ID:</strong> {docId}</p>
+            <p><strong>Title:</strong> {metadata?.title || 'N/A'}</p>
+            <p><strong>Description:</strong> {metadata?.description || 'N/A'}</p>
+            <p><strong>Creator:</strong> {doc.creator}</p>
+            <p><strong>IPFS Hash:</strong> {doc.ipfsHash}</p>
+            <p><strong>Status:</strong> {doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : 'Pending'}</p>
+            <p><strong>Signatures:</strong> {doc.signatureCount}/{doc.signers?.length || 0}</p>
           </div>
-          
-          <div className="space-y-3">
-            <h4 className="font-semibold">Signatures:</h4>
-            {doc?.signers && doc.signers.map((signer, index) => (
-              <div key={signer} className="bg-white p-3 rounded border">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <strong>Signer {index + 1}:</strong> {signer}
-                    {signatures[signer] ? (
-                      <div className="mt-2">
-                        <div className="text-sm text-gray-600">
-                          <strong>Signature:</strong>
-                          <div className="font-mono text-xs bg-gray-100 p-2 rounded mt-1 break-all">
-                            {formatSignature(signatures[signer])}
-                          </div>
-                        </div>
-                        {signatureVerification[signer] !== undefined && (
-                          <div className={`text-sm mt-1 ${signatureVerification[signer] ? 'text-green-600' : 'text-red-600'}`}>
-                            <strong>Verification:</strong> {signatureVerification[signer] ? '✓ Valid' : '✗ Invalid'}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-gray-500 text-sm mt-1">Not signed yet</div>
-                    )}
-                  </div>
-                  {signatures[signer] && (
-                    <button
-                      onClick={() => {
-                        const message = createVerificationMessage(documentHash, signer, signatures[signer]);
-                        navigator.clipboard.writeText(message);
-                        setSuccess('Verification details copied to clipboard!');
-        dispatch({
-          type: 'success',
-          message: 'Verification details copied to clipboard!',
-          title: 'Success',
-          position: 'topR',
-        });
-                      }}
-                      className="text-blue-600 hover:text-blue-800 text-sm"
-                    >
-                      Copy Verification
-                    </button>
+        </div>
+        
+        <div>
+          <h3 className="text-lg font-semibold mb-4">Signers</h3>
+          <div className="space-y-2">
+            {doc.signers?.map((signer, index) => (
+              <div key={signer} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                <span>{signer}</span>
+                <div className="flex items-center space-x-2">
+                  {signatures[signer] ? (
+                    <span className="text-green-600">✓ Signed</span>
+                  ) : (
+                    <span className="text-yellow-600">Pending</span>
+                  )}
+                  {signatures[signer] && signatureVerification[signer] !== undefined && (
+                    <span className={signatureVerification[signer] ? 'text-green-600' : 'text-red-600'}>
+                      {signatureVerification[signer] ? '✓ Valid' : '✗ Invalid'}
+                    </span>
                   )}
                 </div>
               </div>
             ))}
           </div>
-          
-          <div className="mt-4 p-3 bg-blue-50 rounded border">
-            <h5 className="font-semibold text-blue-900 mb-2">How to Verify Signatures:</h5>
-            <div className="text-sm text-blue-800 space-y-1">
-              <p>1. Use the document hash above</p>
-              <p>2. Use the signer's address and signature</p>
-              <p>3. Verify using Ethereum's ecrecover function</p>
-              <p>4. Or use our verification tool below</p>
-            </div>
-          </div>
+        </div>
+      </div>
+
+      {metadata?.file?.encrypted && !decryptedFileUrl && (
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <h3 className="text-lg font-semibold mb-2">Encrypted Document</h3>
+          <p className="mb-4">This document is encrypted. You need to decrypt it before signing.</p>
+          <button
+            onClick={handleDecrypt}
+            disabled={decrypting}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+          >
+            {decrypting ? 'Decrypting...' : 'Decrypt Document'}
+          </button>
+          {decryptionError && <p className="text-red-600 mt-2">{decryptionError}</p>}
         </div>
       )}
-      {account === doc.creator && !doc.isRevoked && (
-        <div className="mt-6 space-x-4">
-          <button 
-            onClick={handleRevoke} 
-            disabled={revoking}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded disabled:opacity-50"
+
+      {decryptedFileUrl && (
+        <div className="mt-6 p-4 bg-green-50 rounded-lg">
+          <h3 className="text-lg font-semibold mb-2">Decrypted Document</h3>
+          <a
+            href={decryptedFileUrl}
+            download={metadata?.file?.name || 'document'}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
           >
-            {revoking ? 'Revoking...' : 'Revoke Document'}
-          </button>
-          <button 
-            onClick={() => setShowAmendForm(true)}
-            className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded"
-          >
-            Amend Document
-          </button>
+            Download Document
+          </a>
         </div>
       )}
+
+      {success && <div className="mt-4 p-4 bg-green-50 text-green-700 rounded">{success}</div>}
+
+      <div className="mt-6 flex space-x-4">
+        {!hasSigned && isCurrentSigner && !doc.isRevoked && (
+          <button
+            onClick={handleSign}
+            disabled={signing || (metadata?.file?.encrypted && !decryptedFileUrl)}
+            className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+          >
+            {signing ? 'Signing...' : 'Sign Document'}
+          </button>
+        )}
+        
+        {doc.creator?.toLowerCase() === account?.toLowerCase() && !doc.isRevoked && (
+          <>
+            <button
+              onClick={() => setShowAmendForm(!showAmendForm)}
+              className="px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+            >
+              Amend Document
+            </button>
+            <button
+              onClick={handleRevoke}
+              disabled={revoking}
+              className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-400"
+            >
+              {revoking ? 'Revoking...' : 'Revoke Document'}
+            </button>
+          </>
+        )}
+      </div>
+
       {showAmendForm && (
-        <div className="mt-6 p-4 border rounded-lg bg-gray-50">
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
           <h3 className="text-lg font-semibold mb-4">Amend Document</h3>
-          <form onSubmit={(e) => { e.preventDefault(); handleAmend(); }} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">New Title</label>
-              <input
-                type="text"
-                value={amendTitle}
-                onChange={(e) => setAmendTitle(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                placeholder="New title (optional)"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">New Description</label>
-              <textarea
-                value={amendDescription}
-                onChange={(e) => setAmendDescription(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                placeholder="New description (optional)"
-                rows={3}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">New File (optional)</label>
-              <input
-                type="file"
-                onChange={(e) => setAmendFile(e.target.files[0])}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                accept=".pdf,.jpg,.jpeg,.png,.txt"
-              />
-            </div>
-            <div className="flex gap-2">
+          <div className="space-y-4">
+            <input
+              type="text"
+              placeholder="New title"
+              value={amendTitle}
+              onChange={(e) => setAmendTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded"
+            />
+            <textarea
+              placeholder="New description"
+              value={amendDescription}
+              onChange={(e) => setAmendDescription(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded"
+              rows={3}
+            />
+            <input
+              type="file"
+              onChange={(e) => setAmendFile(e.target.files[0])}
+              className="w-full"
+            />
+            <div className="flex space-x-2">
               <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                onClick={handleAmend}
                 disabled={amending}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
               >
-                {amending ? 'Amending...' : 'Amend Document'}
+                {amending ? 'Amending...' : 'Submit Amendment'}
               </button>
               <button
-                type="button"
                 onClick={() => setShowAmendForm(false)}
-                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
               >
                 Cancel
               </button>
             </div>
-          </form>
+          </div>
+        </div>
+      )}
+
+      {Object.keys(signatures).length > 0 && (
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold mb-4">Signatures</h3>
+          <div className="space-y-2">
+            {Object.entries(signatures).map(([signer, signature]) => (
+              <div key={signer} className="p-4 bg-gray-50 rounded-lg">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p><strong>Signer:</strong> {signer}</p>
+                    <p><strong>Signature:</strong> {formatSignature(signature)}</p>
+                    {signatureVerification[signer] !== undefined && (
+                      <p><strong>Verification:</strong> 
+                        <span className={signatureVerification[signer] ? 'text-green-600' : 'text-red-600'}>
+                          {signatureVerification[signer] ? ' Valid' : ' Invalid'}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => copyVerificationDetails(signer, signature)}
+                    className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                  >
+                    Copy Verification
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

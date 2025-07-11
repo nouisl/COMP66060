@@ -2,16 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { useMoralis } from 'react-moralis';
-<<<<<<< Updated upstream
-import Docu3 from '../contracts/Docu3.json';
-=======
-<<<<<<< Updated upstream
-import Docu3ABI from '../contracts/Docu3.json';
-=======
 import { useNotification } from '@web3uikit/core';
 import Docu3 from '../contracts/Docu3.json';
->>>>>>> Stashed changes
->>>>>>> Stashed changes
+
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function DocumentList() {
@@ -66,7 +59,7 @@ function DocumentList() {
       }
     }
     if (account) fetchDocuments();
-  }, [account]);
+  }, [account, dispatch]);
 
   if (loading) return <div className="text-center py-8">Loading documents...</div>;
   if (error) return <div className="text-center text-red-600 py-8">{error}</div>;
@@ -101,9 +94,9 @@ function DocumentList() {
                 <td className="py-2 px-4 border-b">{doc.fullySigned ? 'Signed' : doc.isRevoked ? 'Revoked' : 'Pending'}</td>
                 <td className="py-2 px-4 border-b">
                   {doc.fullySigned ? (
-                    <span className="text-green-600 font-medium">✓ {doc.signatures}/{doc.signers?.length || 0}</span>
+                    <span className="text-green-600 font-medium">✓ {doc.signatureCount}/{doc.signers?.length || 0}</span>
                   ) : (
-                    <span className="text-yellow-600">{doc.signatures}/{doc.signers?.length || 0}</span>
+                    <span className="text-yellow-600">{doc.signatureCount}/{doc.signers?.length || 0}</span>
                   )}
                 </td>
                 <td className="py-2 px-4 border-b">
