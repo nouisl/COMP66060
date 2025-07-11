@@ -1,26 +1,34 @@
 const hre = require("hardhat");
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
 
 async function main() {
+  console.log("Deploying DocumentSign contract...");
+
   const DocumentSign = await hre.ethers.getContractFactory("DocumentSign");
   const documentSign = await DocumentSign.deploy();
 
-  console.log("DocumentSign deployed to:", documentSign.target);
+  await documentSign.waitForDeployment();
 
-  const addressData = { address: documentSign.target };
-  const outputDir = path.join(__dirname, '../frontend/src/contracts');
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
+  const address = await documentSign.getAddress();
+  console.log("DocumentSign deployed to:", address);
+
+  console.log("Contract deployed successfully!");
+  console.log("Please update your frontend environment variables:");
+  console.log(`REACT_APP_CONTRACT_ADDRESS=${address}`);
+  console.log("REACT_APP_NETWORK_ID=80002");
+  
+  const contractArtifact = await hre.artifacts.readArtifact("DocumentSign");
   fs.writeFileSync(
-    path.join(outputDir, 'contract-address.json'),
-    JSON.stringify(addressData, null, 2)
+    './frontend/src/contracts/Docu3.json',
+    JSON.stringify(contractArtifact, null, 2)
   );
-  console.log('Contract address saved to frontend/src/contracts/contract-address.json');
+  
+  console.log("Contract ABI saved to frontend/src/contracts/Docu3.json");
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
