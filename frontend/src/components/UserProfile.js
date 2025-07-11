@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useMoralis } from 'react-moralis';
-import Docu3ABI from '../contracts/Docu3.json';
+import Docu3 from '../contracts/Docu3.json';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function UserProfile() {
@@ -14,9 +14,9 @@ function UserProfile() {
       if (!account) return;
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, provider);
-        const data = await contract.getUserProfile(account);
-        setProfile(data);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
+        const [firstName, familyName, email, dob, isRegistered, publicKey] = await contract.getUserProfile(account);
+        setProfile({ firstName, familyName, email, dob, isRegistered, publicKey });
       } catch (err) {
       } finally {
         setLoading(false);
@@ -37,6 +37,9 @@ function UserProfile() {
           <div><strong>Email:</strong> {profile.email}</div>
           <div><strong>Date of Birth:</strong> {profile.dob && new Date(Number(profile.dob) * 1000).toLocaleDateString()}</div>
           <div><strong>Registered:</strong> {profile.isRegistered ? 'Yes' : 'No'}</div>
+          {profile.publicKey && (
+            <div><strong>Public Key:</strong> <span className="break-all text-xs">{profile.publicKey}</span></div>
+          )}
         </div>
       ) : (
         <div className="text-gray-500">No profile found.</div>

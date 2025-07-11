@@ -8,6 +8,7 @@ import DocumentList from './components/DocumentList';
 import DocumentDetail from './components/DocumentDetail';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import SignatureVerifier from './components/SignatureVerifier';
 import { useMoralis } from 'react-moralis';
 import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
@@ -77,14 +78,12 @@ function PublicOnlyRoute({ children }) {
 function App() {
   const { account } = useMoralis();
   const [profileChecked, setProfileChecked] = useState(false);
-  const [isRegistered, setIsRegistered] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     const checkProfile = async () => {
       if (account) {
         const registered = await checkUserRegistered(account);
-        setIsRegistered(registered);
         if (!registered) {
           navigate('/register');
         }
@@ -108,6 +107,7 @@ function App() {
           <Route path="/register" element={<PublicOnlyRoute><UserRegistration /></PublicOnlyRoute>} />
           <Route path="/profile" element={<UserProfile />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/verify" element={<SignatureVerifier />} />
         </Routes>
       </main>
       <Footer />

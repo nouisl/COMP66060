@@ -51,6 +51,9 @@ function Header() {
                   </Link>
                 </>
               )}
+              <Link to="/verify" className="px-3 py-2 rounded-md text-sm font-medium">
+                Verify Signatures
+              </Link>
             </div>
           </div>
           <div className="flex items-center space-x-4">

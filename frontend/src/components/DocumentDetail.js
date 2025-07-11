@@ -3,11 +3,27 @@ import { useParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 import Docu3 from '../contracts/Docu3.json';
 import { uploadFolderToPinata } from '../utils/pinata';
+<<<<<<< Updated upstream
 import CryptoJS from 'crypto-js';
+=======
+<<<<<<< Updated upstream
+=======
+import CryptoJS from 'crypto-js';
+import { useNotification } from '@web3uikit/core';
+import { 
+  generateDocumentHash, 
+  signDocumentHash, 
+  verifySignature, 
+  formatSignature,
+  createVerificationMessage 
+} from '../utils/crypto';
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function DocumentDetail() {
   const { docId } = useParams();
+  const dispatch = useNotification();
   const [doc, setDoc] = useState(null);
   const [metadata, setMetadata] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,9 +39,23 @@ function DocumentDetail() {
   const [amendDescription, setAmendDescription] = useState('');
   const [amendFile, setAmendFile] = useState(null);
   const [showAmendForm, setShowAmendForm] = useState(false);
+<<<<<<< Updated upstream
   const [decryptedFileUrl, setDecryptedFileUrl] = useState(null);
   const [decrypting, setDecrypting] = useState(false);
   const [decryptionError, setDecryptionError] = useState('');
+=======
+<<<<<<< Updated upstream
+=======
+  const [decryptedFileUrl, setDecryptedFileUrl] = useState(null);
+  const [decrypting, setDecrypting] = useState(false);
+  const [decryptionError, setDecryptionError] = useState('');
+  const [documentHash, setDocumentHash] = useState('');
+  const [signatures, setSignatures] = useState({});
+  const [signatureVerification, setSignatureVerification] = useState({});
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [signatureLoading, setSignatureLoading] = useState(false);
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 
   useEffect(() => {
     async function fetchDoc() {
@@ -59,8 +89,33 @@ function DocumentDetail() {
         setIsCurrentSigner(currentSigner.toLowerCase() === userAddress.toLowerCase());
         const signed = await contract.hasSigned(docId, userAddress);
         setHasSigned(signed);
+        
+        const signaturesData = {};
+        const verificationData = {};
+        for (const signer of docData.signers) {
+          const signature = await contract.getSignature(docId, signer);
+          signaturesData[signer] = signature;
+          
+          if (signature && metadata?.documentHash) {
+            const isValid = verifySignature(metadata.documentHash, signature, signer);
+            verificationData[signer] = isValid;
+          }
+        }
+        setSignatures(signaturesData);
+        setSignatureVerification(verificationData);
+        
+        if (metadata?.documentHash) {
+          setDocumentHash(metadata.documentHash);
+        }
       } catch (err) {
-        setError(err.message || 'Failed to fetch document.');
+        const errorMessage = err.message || 'Failed to fetch document.';
+        setError(errorMessage);
+        dispatch({
+          type: 'error',
+          message: errorMessage,
+          title: 'Error',
+          position: 'topR',
+        });
       } finally {
         setLoading(false);
       }
@@ -74,15 +129,65 @@ function DocumentDetail() {
     setSuccess('');
     try {
       if (!window.ethereum) throw new Error('No wallet found');
+      
+      if (!decryptedFileUrl && metadata?.file?.encrypted) {
+        throw new Error('Please decrypt and view the document before signing.');
+      }
+      
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+<<<<<<< Updated upstream
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
+=======
+<<<<<<< Updated upstream
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3ABI, signer);
+>>>>>>> Stashed changes
       const tx = await contract.signDocument(docId);
+=======
+      
+      let hashToSign = documentHash;
+      if (!hashToSign && metadata?.documentHash) {
+        hashToSign = metadata.documentHash;
+      } else if (!hashToSign) {
+        hashToSign = doc.ipfsHash;
+      }
+      
+      const signature = await signDocumentHash(hashToSign, signer);
+      
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
+      const tx = await contract.signDocument(docId, signature);
+>>>>>>> Stashed changes
       await tx.wait();
-      setSuccess('Document signed successfully!');
+      
+      setSuccess('Document cryptographically signed successfully!');
+      dispatch({
+        type: 'success',
+        message: 'Document cryptographically signed successfully!',
+        title: 'Success',
+        position: 'topR',
+      });
       setHasSigned(true);
+      
+      setSignatures(prev => ({
+        ...prev,
+        [account]: signature
+      }));
+      
+      const isValid = verifySignature(hashToSign, signature, account);
+      setSignatureVerification(prev => ({
+        ...prev,
+        [account]: isValid
+      }));
+      
     } catch (err) {
-      setError(err.message || 'Failed to sign document.');
+      const errorMessage = err.message || 'Failed to sign document.';
+      setError(errorMessage);
+      dispatch({
+        type: 'error',
+        message: errorMessage,
+        title: 'Signing Error',
+        position: 'topR',
+      });
     } finally {
       setSigning(false);
     }
@@ -97,8 +202,21 @@ function DocumentDetail() {
       const tx = await contract.revokeDocument(docId, "Revoked by creator");
       await tx.wait();
       setSuccess('Document revoked!');
+      dispatch({
+        type: 'success',
+        message: 'Document revoked successfully!',
+        title: 'Success',
+        position: 'topR',
+      });
     } catch (err) {
-      setError(err.message || 'Failed to revoke.');
+      const errorMessage = err.message || 'Failed to revoke.';
+      setError(errorMessage);
+      dispatch({
+        type: 'error',
+        message: errorMessage,
+        title: 'Revoke Error',
+        position: 'topR',
+      });
     } finally {
       setRevoking(false);
     }
@@ -135,13 +253,31 @@ function DocumentDetail() {
       const tx = await contract.amendDocument(docId, newDirHash, doc.expiry);
       await tx.wait();
       setSuccess('Document amended!');
+      dispatch({
+        type: 'success',
+        message: 'Document amended successfully!',
+        title: 'Success',
+        position: 'topR',
+      });
     } catch (err) {
-      setError(err.message || 'Failed to amend.');
+      const errorMessage = err.message || 'Failed to amend.';
+      setError(errorMessage);
+      dispatch({
+        type: 'error',
+        message: errorMessage,
+        title: 'Amend Error',
+        position: 'topR',
+      });
     } finally {
       setAmending(false);
     }
   };
 
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
   // Decryption is not handled in-browser for security. Only registered signers can view if not encrypted.
 
   const handleDecryptAndView = async () => {
@@ -171,12 +307,27 @@ function DocumentDetail() {
       const url = URL.createObjectURL(blob);
       setDecryptedFileUrl(url);
     } catch (err) {
+<<<<<<< Updated upstream
       setDecryptionError(err.message || 'Failed to decrypt.');
+=======
+      const errorMessage = err.message || 'Failed to decrypt.';
+      setDecryptionError(errorMessage);
+      dispatch({
+        type: 'error',
+        message: errorMessage,
+        title: 'Decryption Error',
+        position: 'topR',
+      });
+>>>>>>> Stashed changes
     } finally {
       setDecrypting(false);
     }
   };
 
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
   if (loading) return <div className="text-center py-8">Loading document...</div>;
   if (error) return <div className="text-center text-red-600 py-8">{error}</div>;
   if (!doc) return null;
@@ -264,6 +415,76 @@ function DocumentDetail() {
       {hasSigned && <div className="text-green-600 mt-4">You have signed this document.</div>}
       {success && <div className="text-green-600 mt-4">{success}</div>}
       {error && <div className="text-red-600 mt-4">{error}</div>}
+      
+      {documentHash && (
+        <div className="mt-6 p-4 border rounded-lg bg-gray-50">
+          <h3 className="text-lg font-semibold mb-4">Document Hash & Signatures</h3>
+          <div className="mb-4">
+            <strong>Document Hash:</strong>
+            <div className="font-mono text-sm bg-white p-2 rounded border mt-1 break-all">
+              {documentHash}
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            <h4 className="font-semibold">Signatures:</h4>
+            {doc?.signers && doc.signers.map((signer, index) => (
+              <div key={signer} className="bg-white p-3 rounded border">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <strong>Signer {index + 1}:</strong> {signer}
+                    {signatures[signer] ? (
+                      <div className="mt-2">
+                        <div className="text-sm text-gray-600">
+                          <strong>Signature:</strong>
+                          <div className="font-mono text-xs bg-gray-100 p-2 rounded mt-1 break-all">
+                            {formatSignature(signatures[signer])}
+                          </div>
+                        </div>
+                        {signatureVerification[signer] !== undefined && (
+                          <div className={`text-sm mt-1 ${signatureVerification[signer] ? 'text-green-600' : 'text-red-600'}`}>
+                            <strong>Verification:</strong> {signatureVerification[signer] ? '✓ Valid' : '✗ Invalid'}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-gray-500 text-sm mt-1">Not signed yet</div>
+                    )}
+                  </div>
+                  {signatures[signer] && (
+                    <button
+                      onClick={() => {
+                        const message = createVerificationMessage(documentHash, signer, signatures[signer]);
+                        navigator.clipboard.writeText(message);
+                        setSuccess('Verification details copied to clipboard!');
+        dispatch({
+          type: 'success',
+          message: 'Verification details copied to clipboard!',
+          title: 'Success',
+          position: 'topR',
+        });
+                      }}
+                      className="text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      Copy Verification
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-4 p-3 bg-blue-50 rounded border">
+            <h5 className="font-semibold text-blue-900 mb-2">How to Verify Signatures:</h5>
+            <div className="text-sm text-blue-800 space-y-1">
+              <p>1. Use the document hash above</p>
+              <p>2. Use the signer's address and signature</p>
+              <p>3. Verify using Ethereum's ecrecover function</p>
+              <p>4. Or use our verification tool below</p>
+            </div>
+          </div>
+        </div>
+      )}
       {account === doc.creator && !doc.isRevoked && (
         <div className="mt-6 space-x-4">
           <button 

@@ -2,11 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { useMoralis } from 'react-moralis';
+<<<<<<< Updated upstream
 import Docu3 from '../contracts/Docu3.json';
+=======
+<<<<<<< Updated upstream
+import Docu3ABI from '../contracts/Docu3.json';
+=======
+import { useNotification } from '@web3uikit/core';
+import Docu3 from '../contracts/Docu3.json';
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function DocumentList() {
   const { account } = useMoralis();
+  const dispatch = useNotification();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -43,7 +53,14 @@ function DocumentList() {
         }
         setDocuments(docs);
       } catch (err) {
-        setError(err.message || 'Failed to fetch documents.');
+        const errorMessage = err.message || 'Failed to fetch documents.';
+        setError(errorMessage);
+        dispatch({
+          type: 'error',
+          message: errorMessage,
+          title: 'Error',
+          position: 'topR',
+        });
       } finally {
         setLoading(false);
       }
@@ -68,6 +85,7 @@ function DocumentList() {
               <th className="py-2 px-4 border-b">File Hash</th>
               <th className="py-2 px-4 border-b">Creator</th>
               <th className="py-2 px-4 border-b">Status</th>
+              <th className="py-2 px-4 border-b">Signatures</th>
               <th className="py-2 px-4 border-b">Action</th>
             </tr>
           </thead>
@@ -81,6 +99,13 @@ function DocumentList() {
                 </td>
                 <td className="py-2 px-4 border-b">{doc.creator}</td>
                 <td className="py-2 px-4 border-b">{doc.fullySigned ? 'Signed' : doc.isRevoked ? 'Revoked' : 'Pending'}</td>
+                <td className="py-2 px-4 border-b">
+                  {doc.fullySigned ? (
+                    <span className="text-green-600 font-medium">✓ {doc.signatures}/{doc.signers?.length || 0}</span>
+                  ) : (
+                    <span className="text-yellow-600">{doc.signatures}/{doc.signers?.length || 0}</span>
+                  )}
+                </td>
                 <td className="py-2 px-4 border-b">
                   <Link to={`/documents/${doc.docId}`} className="text-blue-600 underline">View / Sign</Link>
                 </td>

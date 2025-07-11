@@ -3,8 +3,17 @@ import Docu3 from '../contracts/Docu3.json';
 import { ethers } from 'ethers';
 import { uploadFolderToPinata } from '../utils/pinata';
 import { useNotification } from '@web3uikit/core';
+<<<<<<< Updated upstream
 import CryptoJS from 'crypto-js';
 import EthCrypto from 'eth-crypto';
+=======
+<<<<<<< Updated upstream
+=======
+import CryptoJS from 'crypto-js';
+import EthCrypto from 'eth-crypto';
+import { generateDocumentHash } from '../utils/crypto';
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 
 function DocumentUpload() {
   const [error, setError] = useState('');
@@ -20,6 +29,11 @@ function DocumentUpload() {
   const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
   const dispatch = useNotification();
  
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
   useEffect(() => {
     async function fetchRegisteredUsers() {
       if (!window.ethereum) return;
@@ -28,7 +42,11 @@ function DocumentUpload() {
       const addresses = await contract.getAllRegisteredUsers();
       const users = [];
       for (let addr of addresses) {
+<<<<<<< Updated upstream
         const [firstName, familyName, email, dob, isRegistered, publicKey] = await contract.getUserProfile(addr);
+=======
+        const [firstName, familyName, email, , isRegistered, publicKey] = await contract.getUserProfile(addr);
+>>>>>>> Stashed changes
         if (isRegistered && publicKey && publicKey.length > 66) {
           users.push({ address: addr, firstName, familyName, email: email.toLowerCase(), publicKey });
         }
@@ -36,8 +54,14 @@ function DocumentUpload() {
       setRegisteredUsers(users);
     }
     fetchRegisteredUsers();
+<<<<<<< Updated upstream
   }, []);
 
+=======
+  }, [CONTRACT_ADDRESS]);
+
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -58,6 +82,11 @@ function DocumentUpload() {
         throw new Error('File must have a valid extension');
       }
       const filePath = 'document.' + fileExt;
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
       const symmetricKey = CryptoJS.lib.WordArray.random(32).toString();
       const fileBuffer = await selectedFile.arrayBuffer();
       const wordArray = CryptoJS.lib.WordArray.create(fileBuffer);
@@ -73,6 +102,12 @@ function DocumentUpload() {
         const encryptedSymmetricKey = await EthCrypto.encryptWithPublicKey(publicKey, symmetricKey);
         encryptedKeys[signers[i].address] = EthCrypto.cipher.stringify(encryptedSymmetricKey);
       }
+<<<<<<< Updated upstream
+=======
+      const documentHash = await generateDocumentHash(selectedFile, null);
+      
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
       const metadata = {
         title,
         description,
@@ -81,7 +116,15 @@ function DocumentUpload() {
           path: filePath,
           encrypted: true,
         },
+<<<<<<< Updated upstream
         encryptedKeys, 
+=======
+<<<<<<< Updated upstream
+=======
+        documentHash,
+        encryptedKeys, 
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
       };
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
       const files = [
