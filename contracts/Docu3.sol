@@ -11,8 +11,9 @@ contract DocumentSign {
         mapping(address => Role) roles; 
         mapping(address => bool) hasSigned;
         mapping(address => uint256) signedAt;
+        mapping(address => string) signatures;
         uint256 createdAt;
-        uint256 signatures;
+        uint256 signatureCount;
         bool isRevoked;
         bool exists;
         uint256 expiry;
@@ -44,7 +45,8 @@ contract DocumentSign {
     event DocumentSigned(
         uint256 indexed docId,
         address indexed signer,
-        uint256 signedAt
+        uint256 signedAt,
+        string signature
     );
     event DocumentRevoked(
         uint256 indexed docId,
@@ -105,16 +107,32 @@ contract DocumentSign {
         return doc.expiry != 0 && block.timestamp > doc.expiry;
     }
 
-    function signDocument(uint256 _docId) external onlySigner(_docId) notRevoked(_docId) {
+    function signDocument(uint256 _docId, string memory _signature) external onlySigner(_docId) notRevoked(_docId) {
         Document storage doc = documents[_docId];
         require(!isExpired(_docId), "Document expired");
         require(!doc.hasSigned[msg.sender], "Already signed");
         require(doc.signers[doc.currentSignerIndex] == msg.sender, "Not your turn to sign");
+        require(bytes(_signature).length > 0, "Signature required");
+        
         doc.hasSigned[msg.sender] = true;
         doc.signedAt[msg.sender] = block.timestamp;
-        doc.signatures++;
+        doc.signatures[msg.sender] = _signature;
+        doc.signatureCount++;
         doc.currentSignerIndex++;
-        emit DocumentSigned(_docId, msg.sender, block.timestamp);
+        emit DocumentSigned(_docId, msg.sender, block.timestamp, _signature);
+    }
+
+    function signDocumentLegacy(uint256 _docId) external onlySigner(_docId) notRevoked(_docId) {
+        Document storage doc = documents[_docId];
+        require(!isExpired(_docId), "Document expired");
+        require(!doc.hasSigned[msg.sender], "Already signed");
+        require(doc.signers[doc.currentSignerIndex] == msg.sender, "Not your turn to sign");
+        
+        doc.hasSigned[msg.sender] = true;
+        doc.signedAt[msg.sender] = block.timestamp;
+        doc.signatureCount++;
+        doc.currentSignerIndex++;
+        emit DocumentSigned(_docId, msg.sender, block.timestamp, "");
     }
 
     function revokeDocument(uint256 _docId, string memory _reason) external onlyOwner(_docId) notRevoked(_docId) {
@@ -131,12 +149,16 @@ contract DocumentSign {
         return documents[_docId].signedAt[_signer];
     }
 
+    function getSignature(uint256 _docId, address _signer) external view returns (string memory) {
+        return documents[_docId].signatures[_signer];
+    }
+
     function getDocument(uint256 _docId) external view returns (
         string memory ipfsHash,
         address creator,
         address[] memory signers,
         uint256 createdAt,
-        uint256 signatures,
+        uint256 signatureCount,
         bool fullySigned,
         bool isRevoked
     ) {
@@ -154,7 +176,7 @@ contract DocumentSign {
             doc.creator,
             doc.signers,
             doc.createdAt,
-            doc.signatures,
+            doc.signatureCount,
             allSigned,
             doc.isRevoked
         );
@@ -194,6 +216,36 @@ contract DocumentSign {
         } else {
             return address(0); // All signed
         }
+    }
+
+    function verifySignature(
+        uint256 _docId, 
+        address _signer, 
+        bytes32 _documentHash, 
+        bytes memory _signature
+    ) external view returns (bool) {
+        require(documents[_docId].exists, "Document does not exist");
+        require(documents[_docId].hasSigned[_signer], "Signer has not signed this document");
+        require(_signature.length == 65, "Invalid signature length");
+        
+        bytes32 messageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _documentHash));
+        
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        
+        assembly {
+            r := mload(add(_signature, 32))
+            s := mload(add(_signature, 64))
+            v := byte(0, mload(add(_signature, 96)))
+        }
+        
+        if (v < 27) v += 27;
+        require(v == 27 || v == 28, "Invalid signature 'v' value");
+        
+        address recoveredSigner = ecrecover(messageHash, v, r, s);
+        
+        return recoveredSigner == _signer;
     }
 
     function registerUser(
