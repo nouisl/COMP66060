@@ -70,9 +70,18 @@ function DocumentUpload() {
       const encryptedKeys = {};
       for (let i = 0; i < signers.length; i++) {
         const user = registeredUsers.find(u => u.address === signers[i].address);
-        const publicKey = user.publicKey;
-        if (!publicKey || publicKey.length < 66) {
-          throw new Error(`Missing or invalid public key for signer ${signers[i].email}`);
+        let publicKey = user.publicKey;
+        if (!publicKey) {
+          throw new Error(`Missing public key for signer ${signers[i].email}`);
+        }
+        if (publicKey.startsWith('0x')) {
+          publicKey = publicKey.slice(2);
+        }
+        if (publicKey.length === 130 && publicKey.startsWith('04')) {
+          publicKey = publicKey.slice(2);
+        }
+        if (![64, 128].includes(publicKey.length)) {
+          throw new Error(`Invalid public key length for signer ${signers[i].email}: got ${publicKey.length}, expected 64 (compressed) or 128 (uncompressed)`);
         }
         const encryptedSymmetricKey = await EthCrypto.encryptWithPublicKey(publicKey, symmetricKey);
         encryptedKeys[signers[i].address] = EthCrypto.cipher.stringify(encryptedSymmetricKey);
