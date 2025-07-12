@@ -11,15 +11,18 @@ function UserRegistration() {
   const [email, setEmail] = useState('');
   const [dob, setDob] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pending, setPending] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const dispatch = useNotification();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     setLoading(true);
+    setPending(false);
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       const provider = new ethers.BrowserProvider(window.ethereum);
@@ -31,8 +34,16 @@ function UserRegistration() {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const dobTimestamp = Math.floor(new Date(dob).getTime() / 1000);
       const tx = await contract.registerUser(firstName, familyName, email, dobTimestamp, recoveredPublicKey);
+      setPending(true);
+      setSuccess('Transaction sent. Waiting for confirmation...');
+      dispatch({
+        type: 'info',
+        message: 'Transaction sent. Waiting for confirmation...',
+        title: 'Pending',
+        position: 'topR',
+      });
       await tx.wait();
-      setSuccess('Profile registered successfully!');
+      setSuccess('Profile registered successfully! Redirecting...');
       dispatch({
         type: 'success',
         message: 'Profile registered successfully!',
@@ -40,18 +51,34 @@ function UserRegistration() {
         position: 'topR',
       });
       setTimeout(() => {
-        window.location.replace('/dashboard');
-      }, 1500);
+        navigate('/dashboard');
+      }, 3000);
     } catch (err) {
-      setError(err.message || 'Registration failed.');
-      dispatch({
-        type: 'error',
-        message: err.message || 'Registration failed.',
-        title: 'Registration Error',
-        position: 'topR',
-      });
+      let msg = err.message || 'Registration failed.';
+      if (msg.toLowerCase().includes('already registered')) {
+        msg = 'You are already registered.';
+        setSuccess('You are already registered! Redirecting...');
+        dispatch({
+          type: 'info',
+          message: 'You are already registered! Redirecting...',
+          title: 'Already Registered',
+          position: 'topR',
+        });
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 2000);
+      } else {
+        setError(msg);
+        dispatch({
+          type: 'error',
+          message: msg,
+          title: 'Registration Error',
+          position: 'topR',
+        });
+      }
     } finally {
       setLoading(false);
+      setPending(false);
     }
   };
 
@@ -69,6 +96,7 @@ function UserRegistration() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="First Name"
               required
+              disabled={loading || pending}
             />
           </div>
           <div>
@@ -80,6 +108,7 @@ function UserRegistration() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Family Name"
               required
+              disabled={loading || pending}
             />
           </div>
           <div>
@@ -91,6 +120,7 @@ function UserRegistration() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="you@example.com"
               required
+              disabled={loading || pending}
             />
           </div>
           <div>
@@ -101,6 +131,7 @@ function UserRegistration() {
               onChange={e => setDob(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
+              disabled={loading || pending}
             />
           </div>
           {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded mb-2">{error}</div>}
@@ -108,9 +139,9 @@ function UserRegistration() {
           <button
             type="submit"
             className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-            disabled={loading}
+            disabled={loading || pending}
           >
-            {loading ? 'Registering...' : 'Register'}
+            {loading || pending ? 'Registering...' : 'Register'}
           </button>
         </form>
       </div>
