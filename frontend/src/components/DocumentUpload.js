@@ -48,6 +48,7 @@ function DocumentUpload() {
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
+      if (!CONTRACT_ADDRESS) throw new Error('Contract address not configured. Please check your environment variables.');
       
       for (let i = 0; i < signers.length; i++) {
         if (!signers[i].address) {
@@ -108,11 +109,84 @@ function DocumentUpload() {
       ];
       
       dirHash = await uploadFolderToPinata(files);
+      
+      if (!dirHash || dirHash.length === 0) {
+        throw new Error('Failed to upload to IPFS. No hash returned.');
+      }
+      
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
+      const uploaderAddress = await signer.getAddress();
+      
+      const network = await provider.getNetwork();
+      const expectedChainId = 80002; // Polygon Amoy testnet
+      if (network.chainId.toString() !== expectedChainId.toString()) {
+        throw new Error(`Please switch to Polygon Amoy testnet (Chain ID: ${expectedChainId}). Current network: ${network.name} (Chain ID: ${network.chainId})`);
+      }
+      
+      try {
+        await contract.documentCount();
+      } catch (err) {
+        throw new Error(`Contract not accessible at address ${CONTRACT_ADDRESS}. Please verify the contract is deployed on the current network.`);
+      }
+      
+      const documentCount = await contract.documentCount();
+      
+      try {
+        const userProfile = await contract.getUserProfile(uploaderAddress);
+      } catch (err) {
+        dispatch({
+          type: 'warning',
+          message: 'User profile fetch failed. Continuing with upload...',
+          title: 'Warning',
+          position: 'topR',
+        });
+      }
+      
       const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
-      const validSigners = signers.map(s => s.address);
+      const validSigners = signers
+        .map(s => s.address)
+        .filter(addr => addr && addr.toLowerCase() !== uploaderAddress.toLowerCase());
+      
+      if (expiryTimestamp > 0 && expiryTimestamp <= Math.floor(Date.now() / 1000)) {
+        throw new Error('Expiry date must be in the future.');
+      }
+      
+      if (validSigners.length === 0) {
+        throw new Error('No valid signers found. At least one signer is required and cannot be the document creator.');
+      }
+      
+      for (let i = 0; i < validSigners.length; i++) {
+        if (!validSigners[i] || validSigners[i] === '0x0000000000000000000000000000000000000000') {
+          throw new Error(`Invalid signer address at position ${i + 1}: ${validSigners[i]}`);
+        }
+        
+        try {
+          const signerProfile = await contract.getUserProfile(validSigners[i]);
+          if (!signerProfile.isRegistered) {
+            throw new Error(`Signer ${validSigners[i]} is not a registered user.`);
+          }
+        } catch (err) {
+          throw new Error(`Signer ${validSigners[i]} is not a registered user or profile fetch failed.`);
+        }
+      }
+      
+      const contractCallData = {
+        ipfsHash: dirHash,
+        signers: validSigners,
+        expiry: expiryTimestamp,
+        signerCount: validSigners.length,
+        uploaderAddress: uploaderAddress
+      };
+      
+      dispatch({
+        type: 'info',
+        message: `Attempting contract call with: IPFS Hash: ${dirHash.slice(0, 10)}..., Signers: ${validSigners.length}, Expiry: ${expiryTimestamp || 'None'}`,
+        title: 'Contract Call',
+        position: 'topR',
+      });
+      
       const tx = await contract.createDocument(dirHash, validSigners, expiryTimestamp);
       await tx.wait();
       
@@ -131,9 +205,39 @@ function DocumentUpload() {
           position: 'topR',
         });
       } else if (dirHash) {
+        let errorMessage = `Folder uploaded to IPFS (hash: ${dirHash}) but contract call failed.`;
+        
+        if (err.message && err.message.includes('IPFS hash required')) {
+          errorMessage = 'IPFS hash is empty or invalid.';
+        } else if (err.message && err.message.includes('At least one signer required')) {
+          errorMessage = 'No valid signers found. At least one signer is required.';
+        } else if (err.message && err.message.includes('Invalid signer address')) {
+          errorMessage = 'One or more signer addresses are invalid.';
+        } else if (err.message && err.message.includes('Owner cannot be signer')) {
+          errorMessage = 'Document creator cannot be a signer.';
+        } else if (err.message && err.message.includes('Expiry must be in the future')) {
+          errorMessage = 'Expiry date must be in the future.';
+        } else if (err.message && err.message.includes('revert')) {
+          errorMessage = `Smart contract reverted: ${err.message}`;
+        } else if (err.message && err.message.includes('insufficient funds')) {
+          errorMessage = 'Insufficient funds for gas. Please add more MATIC to your wallet.';
+        } else if (err.message && err.message.includes('gas')) {
+          errorMessage = 'Gas estimation failed. Please try again or increase gas limit.';
+        } else if (err.message) {
+          errorMessage += `\n\nError details: ${err.message}`;
+        }
+        
+        if (err.reason) {
+          errorMessage += `\n\nRevert reason: ${err.reason}`;
+        }
+        
+        if (err.data) {
+          errorMessage += `\n\nError data: ${err.data}`;
+        }
+        
         dispatch({
           type: 'error',
-          message: `Folder uploaded to IPFS (hash: ${dirHash}) but contract call failed. You can retry or remove the folder from Pinata if needed.`,
+          message: errorMessage,
           title: 'Partial Upload',
           position: 'topR',
         });
@@ -175,6 +279,10 @@ function DocumentUpload() {
     setSigners(signers.filter((_, i) => i !== idx));
   };
 
+
+
+
+
   const isFormValid = () => {
     if (!selectedFile || !title.trim() || signers.length === 0) return false;
     for (let s of signers) {
@@ -186,7 +294,9 @@ function DocumentUpload() {
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] px-4">
     <div className="w-full max-w-4xl bg-white rounded-lg shadow-md p-8 mx-auto">
-      <h1 className="text-2xl font-bold mb-6 text-gray-900">Upload Document</h1>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Upload Document</h1>
+      </div>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Document File *</label>
