@@ -25,15 +25,31 @@ class DocumentService {
       
       const docs = [];
       for (let i = 1; i <= count; i++) {
-        const doc = await contract.getDocument(i);
-        const isSigner = doc.signers && doc.signers.map(addr => addr.toLowerCase()).includes(account?.toLowerCase());
-        const isCreator = doc.creator && doc.creator.toLowerCase() === account?.toLowerCase();
-        
+        const [
+          ipfsHash,
+          creator,
+          signers,
+          createdAt,
+          signatureCount,
+          fullySigned,
+          isRevoked
+        ] = await contract.getDocument(i);
+        const docObj = {
+          ipfsHash,
+          creator,
+          signers,
+          createdAt,
+          signatureCount,
+          fullySigned,
+          isRevoked,
+          docId: i
+        };
+        const isSigner = signers && signers.map(addr => addr.toLowerCase()).includes(account?.toLowerCase());
+        const isCreator = creator && creator.toLowerCase() === account?.toLowerCase();
         if (isSigner || isCreator) {
-          docs.push({ ...doc, docId: i });
+          docs.push(docObj);
         }
       }
-      
       this.cache.set(cacheKey, docs);
       this.lastFetch = now;
       return docs;
