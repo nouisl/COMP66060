@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ethers } from 'ethers';
 import { useMoralis } from 'react-moralis';
-import Docu3 from '../contracts/Docu3.json';
-const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
+import { documentService } from '../utils/documentService';
 
 function Dashboard() {
   const { account } = useMoralis();
@@ -16,43 +14,28 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+    
     async function fetchStats() {
       if (!account) return;
       try {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
-        const count = await contract.documentCount();
-        
-        let totalDocs = 0;
-        let pendingSigs = 0;
-        let signedDocs = 0;
-        let createdDocs = 0;
-
-        for (let i = 1; i <= count; i++) {
-          const doc = await contract.getDocument(i);
-          const isSigner = doc.signers && doc.signers.map(addr => addr.toLowerCase()).includes(account?.toLowerCase());
-          const isCreator = doc.creator && doc.creator.toLowerCase() === account?.toLowerCase();
-          
-          if (isSigner || isCreator) {
-            totalDocs++;
-            if (isCreator) createdDocs++;
-            if (isSigner && !doc.fullySigned) pendingSigs++;
-            if (doc.fullySigned) signedDocs++;
-          }
+        const stats = await documentService.getStatsForUser(account);
+        if (isMounted) {
+          setStats(stats);
         }
-
-        setStats({
-          totalDocuments: totalDocs,
-          pendingSignatures: pendingSigs,
-          signedDocuments: signedDocs,
-          createdDocuments: createdDocs
-        });
       } catch (err) {
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
+    
     fetchStats();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [account]);
 
   if (loading) return <div className="text-center py-8">Loading dashboard...</div>;
