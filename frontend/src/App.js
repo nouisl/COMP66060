@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
 import Docu3 from './contracts/Docu3.json'; 
 import Dashboard from './components/Dashboard';
+import PrivateRoute from './components/PrivateRoute';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 async function checkUserRegistered(account) {
@@ -26,30 +27,6 @@ async function checkUserRegistered(account) {
   } catch {
     return false;
   }
-}
-
-function PrivateRoute({ children }) {
-  const { account } = useMoralis();
-  const [profileChecked, setProfileChecked] = useState(false);
-  const [isRegistered, setIsRegistered] = useState(false);
-
-  useEffect(() => {
-    const checkProfile = async () => {
-      if (account) {
-        const registered = await checkUserRegistered(account);
-        setIsRegistered(registered);
-      } else {
-        setIsRegistered(false);
-      }
-      setProfileChecked(true);
-    };
-    checkProfile();
-  }, [account]);
-
-  if (!account) return <Navigate to="/register" replace />;
-  if (!profileChecked) return null;
-  if (!isRegistered) return <Navigate to="/register" replace />;
-  return children;
 }
 
 function PublicOnlyRoute({ children }) {
@@ -105,8 +82,8 @@ function App() {
           <Route path="/documents" element={<PrivateRoute><DocumentList /></PrivateRoute>} />
           <Route path="/documents/:docId" element={<PrivateRoute><DocumentDetail /></PrivateRoute>} />
           <Route path="/register" element={<PublicOnlyRoute><UserRegistration /></PublicOnlyRoute>} />
-          <Route path="/profile" element={<UserProfile />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/profile" element={<PrivateRoute><UserProfile /></PrivateRoute>} />
+          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/verify" element={<SignatureVerifier />} />
         </Routes>
       </main>
