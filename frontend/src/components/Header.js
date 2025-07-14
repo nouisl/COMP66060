@@ -1,14 +1,15 @@
 import { Link } from 'react-router-dom';
 import { ConnectButton } from '@web3uikit/web3';
 import { useMoralis } from 'react-moralis';
-import { useEffect, useState } from 'react';
+import { useEffect, useContext } from 'react';
 import { ethers } from 'ethers';
 import Docu3 from '../contracts/Docu3.json';
+import { Web3Context } from '../context/Web3Context';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function Header() {
   const { account } = useMoralis();
-  const [isRegistered, setIsRegistered] = useState(false);
+  const { isRegistered, setIsRegistered } = useContext(Web3Context);
 
   useEffect(() => {
     async function checkUserRegistered(account) {
@@ -27,7 +28,7 @@ function Header() {
     } else {
       setIsRegistered(false);
     }
-  }, [account]);
+  }, [account, setIsRegistered]);
 
   return (
     <header className="bg-white shadow-sm sticky top-0 z-20">

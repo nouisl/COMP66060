@@ -3,6 +3,8 @@ import { ethers } from 'ethers';
 import Docu3 from '../contracts/Docu3.json';
 import { useNotification } from '@web3uikit/core';
 import { useNavigate } from 'react-router-dom';
+import { useContext } from 'react';
+import { Web3Context } from '../context/Web3Context';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function UserRegistration() {
@@ -16,6 +18,7 @@ function UserRegistration() {
   const [error, setError] = useState('');
   const dispatch = useNotification();
   const navigate = useNavigate();
+  const { setIsRegistered } = useContext(Web3Context);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,6 +52,7 @@ function UserRegistration() {
         position: 'topR',
       });
       await tx.wait();
+      setIsRegistered(true);
       setSuccess('Profile registered successfully! Redirecting...');
       dispatch({
         type: 'success',
@@ -149,7 +153,10 @@ function UserRegistration() {
             <input
               type="date"
               value={dob}
-              onChange={e => setDob(e.target.value)}
+              onChange={e => {
+                setDob(e.target.value);
+                setError('');
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               disabled={loading || pending}
