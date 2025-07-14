@@ -25,15 +25,21 @@ function UserRegistration() {
     setPending(false);
     try {
       if (!window.ethereum) throw new Error('No wallet found');
+      if (!dob || isNaN(Date.parse(dob))) throw new Error('Please enter a valid date of birth.');
+      const dobDate = new Date(dob);
+      const now = new Date();
+      if (dobDate > now) throw new Error('Date of birth cannot be in the future.');
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const message = 'Register for Docu³';
-      const signature = await signer.signMessage(message);
-      const hash = ethers.hashMessage(message);
-      const recoveredPublicKey = ethers.SigningKey.recoverPublicKey(hash, signature);
+      const account = await signer.getAddress();
+      // Fetch MetaMask encryption public key (base64)
+      const publicKey = await window.ethereum.request({
+        method: 'eth_getEncryptionPublicKey',
+        params: [account]
+      });
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const dobTimestamp = Math.floor(new Date(dob).getTime() / 1000);
-      const tx = await contract.registerUser(firstName, familyName, email, dobTimestamp, recoveredPublicKey);
+      const tx = await contract.registerUser(firstName, familyName, email, dobTimestamp, publicKey);
       setPending(true);
       setSuccess('Transaction sent. Waiting for confirmation...');
       dispatch({
@@ -55,27 +61,42 @@ function UserRegistration() {
       }, 3000);
     } catch (err) {
       let msg = err.message || 'Registration failed.';
-      if (msg.toLowerCase().includes('already registered')) {
-        msg = 'You are already registered.';
-        setSuccess('You are already registered! Redirecting...');
-        dispatch({
-          type: 'info',
-          message: 'You are already registered! Redirecting...',
-          title: 'Already Registered',
-          position: 'topR',
-        });
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
-      } else {
-        setError(msg);
+      if (err.code === 4001 || (msg && msg.toLowerCase().includes('user denied')) || (msg && msg.toLowerCase().includes('rejected'))) {
+        msg = 'You rejected the wallet request.';
+        setError('');
         dispatch({
           type: 'error',
           message: msg,
           title: 'Registration Error',
           position: 'topR',
         });
+        setLoading(false);
+        setPending(false);
+        return;
       }
+      if (msg.toLowerCase().includes('already registered')) {
+        msg = 'You are already registered. Please connect your wallet.';
+        setSuccess('You are already registered. Please connect your wallet. Redirecting to homepage...');
+        dispatch({
+          type: 'info',
+          message: 'You are already registered. Please connect your wallet. Redirecting to homepage...',
+          title: 'Already Registered',
+          position: 'topR',
+        });
+        setTimeout(() => {
+          navigate('/');
+        }, 2000);
+        setLoading(false);
+        setPending(false);
+        return;
+      }
+      setError(msg);
+      dispatch({
+        type: 'error',
+        message: msg,
+        title: 'Registration Error',
+        position: 'topR',
+      });
     } finally {
       setLoading(false);
       setPending(false);
