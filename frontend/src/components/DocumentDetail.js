@@ -314,11 +314,6 @@ function DocumentDetail() {
       if (!metadata?.encryptedKeys?.[account]) {
         throw new Error('No encrypted key found for your account');
       }
-      
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const privateKey = await signer.provider.send('eth_getEncryptionPublicKey', [account]);
-      
       const encryptedKey = metadata.encryptedKeys[account];
       const decryptedKey = await window.ethereum.request({
         method: 'eth_decrypt',
@@ -373,7 +368,6 @@ function DocumentDetail() {
     }
   };
 
-  // Always show debug UI at the very top
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-2">
       {loading && <div className="text-center py-8">Loading document...</div>}

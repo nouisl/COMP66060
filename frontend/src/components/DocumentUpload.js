@@ -6,6 +6,11 @@ import { useNotification } from '@web3uikit/core';
 import CryptoJS from 'crypto-js';
 import EthCrypto from 'eth-crypto';
 import { generateDocumentHash } from '../utils/crypto';
+import { encrypt } from '@metamask/eth-sig-util';
+
+function stringToHex(str) {
+  return Array.from(new TextEncoder().encode(str)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 function DocumentUpload() {
   const [error, setError] = useState('');
@@ -45,10 +50,16 @@ function DocumentUpload() {
     setSuccess('');
     setUploading(true);
     let dirHash = null;
+    let provider, signer, uploaderAddress, contract;
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
       if (!CONTRACT_ADDRESS) throw new Error('Contract address not configured. Please check your environment variables.');
+      
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      uploaderAddress = await signer.getAddress();
+      contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       
       for (let i = 0; i < signers.length; i++) {
         if (!signers[i].address) {
@@ -71,21 +82,28 @@ function DocumentUpload() {
       const encryptedKeys = {};
       for (let i = 0; i < signers.length; i++) {
         const user = registeredUsers.find(u => u.address === signers[i].address);
-        let publicKey = user.publicKey;
+        const publicKey = user.publicKey; 
         if (!publicKey) {
           throw new Error(`Missing public key for signer ${signers[i].email}`);
         }
-        if (publicKey.startsWith('0x')) {
-          publicKey = publicKey.slice(2);
-        }
-        if (publicKey.length === 130 && publicKey.startsWith('04')) {
-          publicKey = publicKey.slice(2);
-        }
-        if (![64, 128].includes(publicKey.length)) {
-          throw new Error(`Invalid public key length for signer ${signers[i].email}: got ${publicKey.length}, expected 64 (compressed) or 128 (uncompressed)`);
-        }
-        const encryptedSymmetricKey = await EthCrypto.encryptWithPublicKey(publicKey, symmetricKey);
-        encryptedKeys[signers[i].address] = EthCrypto.cipher.stringify(encryptedSymmetricKey);
+        const encryptedSymmetricKey = encrypt({
+          publicKey,
+          data: symmetricKey,
+          version: 'x25519-xsalsa20-poly1305'
+        });
+        const encryptedKeyString = stringToHex(JSON.stringify(encryptedSymmetricKey));
+        encryptedKeys[signers[i].address] = encryptedKeyString;
+      }
+      const uploader = registeredUsers.find(u => u.address.toLowerCase() === uploaderAddress.toLowerCase());
+      if (uploader && uploader.publicKey) {
+        const creatorPublicKey = uploader.publicKey;
+        const encryptedSymmetricKey = encrypt({
+          publicKey: creatorPublicKey,
+          data: symmetricKey,
+          version: 'x25519-xsalsa20-poly1305'
+        });
+        const encryptedKeyString = stringToHex(JSON.stringify(encryptedSymmetricKey));
+        encryptedKeys[uploaderAddress] = encryptedKeyString;
       }
       
       const documentHash = await generateDocumentHash(selectedFile, null);
@@ -113,11 +131,6 @@ function DocumentUpload() {
       if (!dirHash || dirHash.length === 0) {
         throw new Error('Failed to upload to IPFS. No hash returned.');
       }
-      
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
-      const uploaderAddress = await signer.getAddress();
       
       const network = await provider.getNetwork();
       const expectedChainId = 80002; // Polygon Amoy testnet
@@ -278,11 +291,6 @@ function DocumentUpload() {
   const removeSigner = (idx) => {
     setSigners(signers.filter((_, i) => i !== idx));
   };
-
-
-
-
-
   const isFormValid = () => {
     if (!selectedFile || !title.trim() || signers.length === 0) return false;
     for (let s of signers) {
