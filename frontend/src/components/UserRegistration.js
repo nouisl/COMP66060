@@ -32,6 +32,8 @@ function UserRegistration() {
       const dobDate = new Date(dob);
       const now = new Date();
       if (dobDate > now) throw new Error('Date of birth cannot be in the future.');
+      // Normalize email
+      const normalizedEmail = email.trim().toLowerCase();
       // Check for duplicate email
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
@@ -40,7 +42,7 @@ function UserRegistration() {
       let duplicateAddress = null;
       for (let addr of allUsers) {
         const profile = await contract.getUserProfile(addr);
-        if (profile.email && profile.email.toLowerCase() === email.toLowerCase()) {
+        if (profile.email && profile.email.trim().toLowerCase() === normalizedEmail) {
           duplicate = true;
           duplicateAddress = addr;
           break;
@@ -76,14 +78,13 @@ function UserRegistration() {
           return;
         }
       }
-      // Fetch MetaMask encryption public key (base64)
       const publicKey = await window.ethereum.request({
         method: 'eth_getEncryptionPublicKey',
         params: [account]
       });
       const contractWithSigner = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const dobTimestamp = Math.floor(new Date(dob).getTime() / 1000);
-      const tx = await contractWithSigner.registerUser(firstName, familyName, email, dobTimestamp, publicKey);
+      const tx = await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, publicKey);
       setPending(true);
       setSuccess('Transaction sent. Waiting for confirmation...');
       dispatch({

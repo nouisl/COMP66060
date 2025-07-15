@@ -36,7 +36,7 @@ function DocumentUpload() {
       for (let addr of addresses) {
         const [firstName, familyName, email, , isRegistered, publicKey] = await contract.getUserProfile(addr);
         if (isRegistered && publicKey && publicKey.length > 66) {
-          users.push({ address: addr, firstName, familyName, email: email.toLowerCase(), publicKey });
+          users.push({ address: addr, firstName, familyName, email: email.trim().toLowerCase(), publicKey });
         }
       }
       setRegisteredUsers(users);
@@ -275,7 +275,8 @@ function DocumentUpload() {
 
   const handleSignerEmailChange = (idx, email) => {
     const updated = [...signers];
-    const user = registeredUsers.find(u => u.email === email.toLowerCase());
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = registeredUsers.find(u => u.email === normalizedEmail);
     if (user) {
       updated[idx] = { email, error: '', address: user.address };
     } else {
