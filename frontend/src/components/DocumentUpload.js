@@ -4,7 +4,6 @@ import { ethers } from 'ethers';
 import { uploadFolderToPinata } from '../utils/pinata';
 import { useNotification } from '@web3uikit/core';
 import CryptoJS from 'crypto-js';
-import EthCrypto from 'eth-crypto';
 import { generateDocumentHash } from '../utils/crypto';
 import { encrypt } from '@metamask/eth-sig-util';
 
@@ -29,17 +28,24 @@ function DocumentUpload() {
   useEffect(() => {
     async function fetchRegisteredUsers() {
       if (!window.ethereum) return;
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
-      const addresses = await contract.getAllRegisteredUsers();
-      const users = [];
-      for (let addr of addresses) {
-        const [firstName, familyName, email, , isRegistered, publicKey] = await contract.getUserProfile(addr);
-        if (isRegistered && publicKey && publicKey.length > 66) {
-          users.push({ address: addr, firstName, familyName, email: email.trim().toLowerCase(), publicKey });
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
+        const addresses = await contract.getAllRegisteredUsers();
+        const users = [];
+        for (let addr of addresses) {
+          try {
+            const profile = await contract.getUserProfile(addr);
+            const [firstName, familyName, email, , isRegistered, publicKey] = profile;
+            if (isRegistered && publicKey) {
+              users.push({ address: addr, firstName, familyName, email: email.trim().toLowerCase(), publicKey });
+            }
+          } catch (err) {
+          }
         }
+        setRegisteredUsers(users);
+      } catch (err) {
       }
-      setRegisteredUsers(users);
     }
     fetchRegisteredUsers();
   }, [CONTRACT_ADDRESS]);
