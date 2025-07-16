@@ -26,46 +26,28 @@ function UserRegistration() {
     setSuccess('');
     setLoading(true);
     setPending(false);
+    const normalizedEmail = email.trim().toLowerCase();
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!dob || isNaN(Date.parse(dob))) throw new Error('Please enter a valid date of birth.');
       const dobDate = new Date(dob);
       const now = new Date();
       if (dobDate > now) throw new Error('Date of birth cannot be in the future.');
-      // Normalize email
-      const normalizedEmail = email.trim().toLowerCase();
-      // Check for duplicate email
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
-      const allUsers = await contract.getAllRegisteredUsers();
-      let duplicate = false;
-      let duplicateAddress = null;
-      for (let addr of allUsers) {
-        const profile = await contract.getUserProfile(addr);
-        if (profile.email && profile.email.trim().toLowerCase() === normalizedEmail) {
-          duplicate = true;
-          duplicateAddress = addr;
-          break;
-        }
-      }
       const signer = await provider.getSigner();
       const account = await signer.getAddress();
-      if (duplicate) {
-        if (duplicateAddress.toLowerCase() === account.toLowerCase()) {
-          setSuccess('You are already registered with this email and wallet. Redirecting to homepage...');
-          dispatch({
-            type: 'info',
-            message: 'You are already registered with this email and wallet. Redirecting to homepage...',
-            title: 'Already Registered',
-            position: 'topR',
-          });
-          setTimeout(() => {
-            navigate('/');
-          }, 2000);
-          setLoading(false);
-          setPending(false);
-          return;
-        } else {
+      const publicKey = await window.ethereum.request({
+        method: 'eth_getEncryptionPublicKey',
+        params: [account]
+      });
+      const contractWithSigner = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
+      const dobTimestamp = Math.floor(new Date(dob).getTime() / 1000);
+      let tx;
+      try {
+        tx = await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, publicKey);
+      } catch (err) {
+        let msg = err.reason || err.data?.message || err.message || 'Registration failed.';
+        if (msg.toLowerCase().includes('email already registered')) {
           setError('This email is already registered with another wallet address. Please use a different email.');
           dispatch({
             type: 'error',
@@ -77,14 +59,37 @@ function UserRegistration() {
           setPending(false);
           return;
         }
+        if (msg.toLowerCase().includes('already registered')) {
+          setSuccess('You are already registered with this wallet. Redirecting to homepage...');
+          dispatch({
+            type: 'info',
+            message: 'You are already registered with this wallet. Redirecting to homepage...',
+            title: 'Already Registered',
+            position: 'topR',
+          });
+          setTimeout(() => {
+            navigate('/');
+          }, 2000);
+          setLoading(false);
+          setPending(false);
+          return;
+        }
+        if (msg.toLowerCase().includes('insufficient funds') || msg.toLowerCase().includes('gas')) {
+          msg = 'You do not have enough MATIC to complete registration. Please add funds to your wallet.';
+        } else if (msg === 'Registration failed.' || msg.toLowerCase().includes('internal json-rpc error')) {
+          msg = 'Registration failed. Please try again or check your wallet.';
+        }
+        setError(msg);
+        dispatch({
+          type: 'error',
+          message: msg,
+          title: 'Registration Error',
+          position: 'topR',
+        });
+        setLoading(false);
+        setPending(false);
+        return;
       }
-      const publicKey = await window.ethereum.request({
-        method: 'eth_getEncryptionPublicKey',
-        params: [account]
-      });
-      const contractWithSigner = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
-      const dobTimestamp = Math.floor(new Date(dob).getTime() / 1000);
-      const tx = await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, publicKey);
       setPending(true);
       setSuccess('Transaction sent. Waiting for confirmation...');
       dispatch({
@@ -120,27 +125,6 @@ function UserRegistration() {
         setPending(false);
         return;
       }
-      if (msg.toLowerCase().includes('already registered')) {
-        msg = 'You are already registered. Please connect your wallet.';
-        setSuccess('You are already registered. Please connect your wallet. Redirecting to homepage...');
-        dispatch({
-          type: 'info',
-          message: 'You are already registered. Please connect your wallet. Redirecting to homepage...',
-          title: 'Already Registered',
-          position: 'topR',
-        });
-        setTimeout(() => {
-          navigate('/');
-        }, 2000);
-        setLoading(false);
-        setPending(false);
-        return;
-      }
-      if (msg.toLowerCase().includes('insufficient funds') || msg.toLowerCase().includes('gas')) {
-        msg = 'You do not have enough MATIC to complete registration. Please add funds to your wallet.';
-      } else if (msg === 'Registration failed.' || msg.toLowerCase().includes('internal json-rpc error')) {
-        msg = 'Registration failed. Please try again or check your wallet.';
-      }
       setError(msg);
       dispatch({
         type: 'error',
@@ -148,6 +132,8 @@ function UserRegistration() {
         title: 'Registration Error',
         position: 'topR',
       });
+      setLoading(false);
+      setPending(false);
     } finally {
       setLoading(false);
       setPending(false);
