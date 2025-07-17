@@ -46,7 +46,7 @@ function UserRegistration() {
       try {
         tx = await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, publicKey);
       } catch (err) {
-        let msg = err.reason || err.data?.message || err.message || 'Registration failed.';
+        let msg = err.reason || err.data?.message || err.message || JSON.stringify(err) || 'Registration failed.';
         if (msg.toLowerCase().includes('email already registered')) {
           setError('This email is already registered with another wallet address. Please use a different email.');
           dispatch({
@@ -111,7 +111,7 @@ function UserRegistration() {
         navigate('/dashboard');
       }, 3000);
     } catch (err) {
-      let msg = err.message || 'Registration failed.';
+      let msg = err.message || JSON.stringify(err) || 'Registration failed.';
       if (err.code === 4001 || (msg && msg.toLowerCase().includes('user denied')) || (msg && msg.toLowerCase().includes('rejected'))) {
         msg = 'You rejected the wallet request.';
         setError('');

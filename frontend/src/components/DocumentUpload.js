@@ -97,7 +97,7 @@ function DocumentUpload() {
           data: symmetricKey,
           version: 'x25519-xsalsa20-poly1305'
         });
-        const encryptedKeyString = stringToHex(JSON.stringify(encryptedSymmetricKey));
+        const encryptedKeyString = JSON.stringify(encryptedSymmetricKey);
         encryptedKeys[signers[i].address] = encryptedKeyString;
       }
       const uploader = registeredUsers.find(u => u.address.toLowerCase() === uploaderAddress.toLowerCase());
@@ -108,7 +108,7 @@ function DocumentUpload() {
           data: symmetricKey,
           version: 'x25519-xsalsa20-poly1305'
         });
-        const encryptedKeyString = stringToHex(JSON.stringify(encryptedSymmetricKey));
+        const encryptedKeyString = JSON.stringify(encryptedSymmetricKey);
         encryptedKeys[uploaderAddress] = encryptedKeyString;
       }
       
@@ -256,14 +256,14 @@ function DocumentUpload() {
         
         dispatch({
           type: 'error',
-          message: errorMessage,
+          message: errorMessage || (err.message || JSON.stringify(err)),
           title: 'Partial Upload',
           position: 'topR',
         });
       } else {
         dispatch({
           type: 'error',
-          message: err.message || 'Upload failed.',
+          message: err.message || JSON.stringify(err) || 'Upload failed.',
           title: 'Error',
           position: 'topR',
         });
