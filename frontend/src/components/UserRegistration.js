@@ -5,6 +5,7 @@ import { useNotification } from '@web3uikit/core';
 import { useNavigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { Web3Context } from '../context/Web3Context';
+import EthCrypto from 'eth-crypto';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function UserRegistration() {
@@ -33,13 +34,17 @@ function UserRegistration() {
       const dobDate = new Date(dob);
       const now = new Date();
       if (dobDate > now) throw new Error('Date of birth cannot be in the future.');
+      let privateKey = localStorage.getItem('docu3_enc_privateKey');
+      let publicKey = localStorage.getItem('docu3_enc_publicKey');
+      if (!privateKey || !publicKey) {
+        const identity = EthCrypto.createIdentity();
+        privateKey = identity.privateKey;
+        publicKey = identity.publicKey;
+        localStorage.setItem('docu3_enc_privateKey', privateKey);
+        localStorage.setItem('docu3_enc_publicKey', publicKey);
+      }
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const account = await signer.getAddress();
-      const publicKey = await window.ethereum.request({
-        method: 'eth_getEncryptionPublicKey',
-        params: [account]
-      });
       const contractWithSigner = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const dobTimestamp = Math.floor(new Date(dob).getTime() / 1000);
       let tx;
