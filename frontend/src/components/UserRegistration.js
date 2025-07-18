@@ -39,7 +39,7 @@ function UserRegistration() {
       if (!privateKey || !publicKey) {
         const identity = EthCrypto.createIdentity();
         privateKey = identity.privateKey;
-        publicKey = identity.publicKey;
+        publicKey = identity.publicKey.startsWith('0x') ? identity.publicKey : '0x' + identity.publicKey;
         localStorage.setItem('docu3_enc_privateKey', privateKey);
         localStorage.setItem('docu3_enc_publicKey', publicKey);
       }
