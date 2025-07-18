@@ -3,13 +3,9 @@ import Docu3 from '../contracts/Docu3.json';
 import { ethers } from 'ethers';
 import { uploadFolderToPinata } from '../utils/pinata';
 import { useNotification } from '@web3uikit/core';
-import CryptoJS from 'crypto-js';
 import { generateDocumentHash } from '../utils/crypto';
-import { encrypt } from '@metamask/eth-sig-util';
-
-function stringToHex(str) {
-  return Array.from(new TextEncoder().encode(str)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import EthCrypto from 'eth-crypto';
+import CryptoJS from 'crypto-js';
 
 function DocumentUpload() {
   const [error, setError] = useState('');
@@ -36,16 +32,14 @@ function DocumentUpload() {
         for (let addr of addresses) {
           try {
             const profile = await contract.getUserProfile(addr);
-            const [firstName, familyName, email, , isRegistered, publicKey] = profile;
-            if (isRegistered && publicKey) {
-              users.push({ address: addr, firstName, familyName, email: email.trim().toLowerCase(), publicKey });
+            const [firstName, familyName, email, , isRegistered] = profile;
+            if (isRegistered) {
+              users.push({ address: addr, firstName, familyName, email: email.trim().toLowerCase() });
             }
-          } catch (err) {
-          }
+          } catch (err) {}
         }
         setRegisteredUsers(users);
-      } catch (err) {
-      }
+      } catch (err) {}
     }
     fetchRegisteredUsers();
   }, [CONTRACT_ADDRESS]);
@@ -61,59 +55,48 @@ function DocumentUpload() {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
       if (!CONTRACT_ADDRESS) throw new Error('Contract address not configured. Please check your environment variables.');
-      
       provider = new ethers.BrowserProvider(window.ethereum);
       signer = await provider.getSigner();
       uploaderAddress = await signer.getAddress();
       contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
-      
       for (let i = 0; i < signers.length; i++) {
         if (!signers[i].address) {
           throw new Error(`Signer ${i + 1}: ${signers[i].email} is not a registered user.`);
         }
       }
-      
       const fileExt = selectedFile.name.split('.').pop().toLowerCase();
       if (!fileExt || fileExt === selectedFile.name) {
         throw new Error('File must have a valid extension');
       }
-      
       const filePath = 'document.' + fileExt;
-      const symmetricKey = CryptoJS.lib.WordArray.random(32).toString();
+      // ENCRYPTION START
+      // 1. Generate random AES key
+      const aesKey = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
+      // 2. Read file as ArrayBuffer
       const fileBuffer = await selectedFile.arrayBuffer();
       const wordArray = CryptoJS.lib.WordArray.create(fileBuffer);
-      const encrypted = CryptoJS.AES.encrypt(wordArray, symmetricKey).toString();
-      const encryptedFileBlob = new Blob([encrypted], { type: 'text/plain' });
-      
+      // 3. Encrypt file with AES
+      const encrypted = CryptoJS.AES.encrypt(wordArray, aesKey).toString();
+      // 4. Convert encrypted data to Blob
+      const encryptedBlob = new Blob([encrypted], { type: 'application/octet-stream' });
+      // 5. For each signer, fetch public key and encrypt AES key
       const encryptedKeys = {};
-      for (let i = 0; i < signers.length; i++) {
-        const user = registeredUsers.find(u => u.address === signers[i].address);
-        const publicKey = user.publicKey; 
-        if (!publicKey) {
-          throw new Error(`Missing public key for signer ${signers[i].email}`);
+      for (let s of signers) {
+        const profile = await contract.getUserProfile(s.address);
+        const pubKey = profile[5];
+        if (!pubKey || pubKey.length !== 130 || !pubKey.startsWith('0x')) {
+          throw new Error(`Invalid public key for signer ${s.email}`);
         }
-        const encryptedSymmetricKey = encrypt({
-          publicKey,
-          data: symmetricKey,
-          version: 'x25519-xsalsa20-poly1305'
-        });
-        const encryptedKeyString = JSON.stringify(encryptedSymmetricKey);
-        encryptedKeys[signers[i].address] = encryptedKeyString;
+        const encryptedKey = await EthCrypto.encryptWithPublicKey(
+          pubKey.slice(2), // remove 0x
+          aesKey
+        );
+        const encryptedKeyString = EthCrypto.cipher.stringify(encryptedKey);
+        encryptedKeys[s.address] = encryptedKeyString;
       }
-      const uploader = registeredUsers.find(u => u.address.toLowerCase() === uploaderAddress.toLowerCase());
-      if (uploader && uploader.publicKey) {
-        const creatorPublicKey = uploader.publicKey;
-        const encryptedSymmetricKey = encrypt({
-          publicKey: creatorPublicKey,
-          data: symmetricKey,
-          version: 'x25519-xsalsa20-poly1305'
-        });
-        const encryptedKeyString = JSON.stringify(encryptedSymmetricKey);
-        encryptedKeys[uploaderAddress] = encryptedKeyString;
-      }
-      
-      const documentHash = await generateDocumentHash(selectedFile, null);
-      
+      // 6. Document hash is computed on encrypted file
+      const documentHash = CryptoJS.SHA256(encrypted).toString();
+      // 7. Metadata
       const metadata = {
         title,
         description,
@@ -123,64 +106,41 @@ function DocumentUpload() {
           encrypted: true,
         },
         documentHash,
-        encryptedKeys, 
+        encryptedKeys
       };
-      
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
       const files = [
-        { path: filePath, content: encryptedFileBlob }, 
+        { path: filePath, content: encryptedBlob },
         { path: 'metadata.json', content: metadataBlob },
       ];
-      
       dirHash = await uploadFolderToPinata(files);
-      
       if (!dirHash || dirHash.length === 0) {
         throw new Error('Failed to upload to IPFS. No hash returned.');
       }
-      
       const network = await provider.getNetwork();
       const expectedChainId = 80002; // Polygon Amoy testnet
       if (network.chainId.toString() !== expectedChainId.toString()) {
         throw new Error(`Please switch to Polygon Amoy testnet (Chain ID: ${expectedChainId}). Current network: ${network.name} (Chain ID: ${network.chainId})`);
       }
-      
       try {
         await contract.documentCount();
       } catch (err) {
         throw new Error(`Contract not accessible at address ${CONTRACT_ADDRESS}. Please verify the contract is deployed on the current network.`);
       }
-      
-      const documentCount = await contract.documentCount();
-      
-      try {
-        const userProfile = await contract.getUserProfile(uploaderAddress);
-      } catch (err) {
-        dispatch({
-          type: 'warning',
-          message: 'User profile fetch failed. Continuing with upload...',
-          title: 'Warning',
-          position: 'topR',
-        });
-      }
-      
       const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
       const validSigners = signers
         .map(s => s.address)
         .filter(addr => addr && addr.toLowerCase() !== uploaderAddress.toLowerCase());
-      
       if (expiryTimestamp > 0 && expiryTimestamp <= Math.floor(Date.now() / 1000)) {
         throw new Error('Expiry date must be in the future.');
       }
-      
       if (validSigners.length === 0) {
         throw new Error('No valid signers found. At least one signer is required and cannot be the document creator.');
       }
-      
       for (let i = 0; i < validSigners.length; i++) {
         if (!validSigners[i] || validSigners[i] === '0x0000000000000000000000000000000000000000') {
           throw new Error(`Invalid signer address at position ${i + 1}: ${validSigners[i]}`);
         }
-        
         try {
           const signerProfile = await contract.getUserProfile(validSigners[i]);
           if (!signerProfile.isRegistered) {
@@ -190,25 +150,14 @@ function DocumentUpload() {
           throw new Error(`Signer ${validSigners[i]} is not a registered user or profile fetch failed.`);
         }
       }
-      
-      const contractCallData = {
-        ipfsHash: dirHash,
-        signers: validSigners,
-        expiry: expiryTimestamp,
-        signerCount: validSigners.length,
-        uploaderAddress: uploaderAddress
-      };
-      
       dispatch({
         type: 'info',
         message: `Attempting contract call with: IPFS Hash: ${dirHash.slice(0, 10)}..., Signers: ${validSigners.length}, Expiry: ${expiryTimestamp || 'None'}`,
         title: 'Contract Call',
         position: 'topR',
       });
-      
       const tx = await contract.createDocument(dirHash, validSigners, expiryTimestamp);
       await tx.wait();
-      
       dispatch({
         type: 'success',
         message: 'Document uploaded and registered on-chain!',
@@ -225,7 +174,6 @@ function DocumentUpload() {
         });
       } else if (dirHash) {
         let errorMessage = `Folder uploaded to IPFS (hash: ${dirHash}) but contract call failed.`;
-        
         if (err.message && err.message.includes('IPFS hash required')) {
           errorMessage = 'IPFS hash is empty or invalid.';
         } else if (err.message && err.message.includes('At least one signer required')) {
@@ -245,15 +193,12 @@ function DocumentUpload() {
         } else if (err.message) {
           errorMessage += `\n\nError details: ${err.message}`;
         }
-        
         if (err.reason) {
           errorMessage += `\n\nRevert reason: ${err.reason}`;
         }
-        
         if (err.data) {
           errorMessage += `\n\nError data: ${err.data}`;
         }
-        
         dispatch({
           type: 'error',
           message: errorMessage || (err.message || JSON.stringify(err)),
