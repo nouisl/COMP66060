@@ -280,4 +280,17 @@ contract DocumentSign {
     function getAllRegisteredUsers() public view returns (address[] memory) {
         return registeredUsers;
     }
+
+    function isSigner(address _user, uint256 _docId) external view returns (bool) {
+        Document storage doc = documents[_docId];
+        if (!doc.exists) return false;
+        if (doc.creator == _user) return true;
+        
+        for (uint i = 0; i < doc.signers.length; i++) {
+            if (doc.signers[i] == _user) {
+                return true;
+            }
+        }
+        return false;
+    }
 } 
