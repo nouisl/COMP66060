@@ -3,9 +3,9 @@ import Docu3 from '../contracts/Docu3.json';
 import { ethers } from 'ethers';
 import { uploadFolderToPinata } from '../utils/pinata';
 import { useNotification } from '@web3uikit/core';
-import { generateDocumentHash } from '../utils/crypto';
-import EthCrypto from 'eth-crypto';
-import CryptoJS from 'crypto-js';
+import { fetchGasPrices, getGasConfig } from '../utils/gasStation';
+
+import { litProtocolService } from '../utils/litProtocol';
 
 function DocumentUpload() {
   const [error, setError] = useState('');
@@ -49,7 +49,6 @@ function DocumentUpload() {
     setError('');
     setSuccess('');
     setUploading(true);
-    let dirHash = null;
     let provider, signer, uploaderAddress, contract;
     try {
       if (!window.ethereum) throw new Error('No wallet found');
@@ -59,6 +58,18 @@ function DocumentUpload() {
       signer = await provider.getSigner();
       uploaderAddress = await signer.getAddress();
       contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
+      
+      const network = await provider.getNetwork();
+      const expectedChainId = 80002;
+      if (network.chainId.toString() !== expectedChainId.toString()) {
+        throw new Error(`Please switch to Polygon Amoy testnet (Chain ID: ${expectedChainId}). Current network: ${network.name} (Chain ID: ${network.chainId})`);
+      }
+      
+      const balance = await provider.getBalance(uploaderAddress);
+      if (balance === 0n) {
+        throw new Error('Your wallet has no MATIC. Please add funds to your wallet.');
+      }
+      
       for (let i = 0; i < signers.length; i++) {
         if (!signers[i].address) {
           throw new Error(`Signer ${i + 1}: ${signers[i].email} is not a registered user.`);
@@ -69,34 +80,81 @@ function DocumentUpload() {
         throw new Error('File must have a valid extension');
       }
       const filePath = 'document.' + fileExt;
-      // ENCRYPTION START
-      // 1. Generate random AES key
-      const aesKey = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
-      // 2. Read file as ArrayBuffer
-      const fileBuffer = await selectedFile.arrayBuffer();
-      const wordArray = CryptoJS.lib.WordArray.create(fileBuffer);
-      // 3. Encrypt file with AES
-      const encrypted = CryptoJS.AES.encrypt(wordArray, aesKey).toString();
-      // 4. Convert encrypted data to Blob
-      const encryptedBlob = new Blob([encrypted], { type: 'application/octet-stream' });
-      // 5. For each signer, fetch public key and encrypt AES key
-      const encryptedKeys = {};
-      for (let s of signers) {
-        const profile = await contract.getUserProfile(s.address);
-        const pubKey = profile[5];
-        if (!pubKey || pubKey.length !== 130 || !pubKey.startsWith('0x')) {
-          throw new Error(`Invalid public key for signer ${s.email}`);
+      
+      const validSignerAddresses = signers.map(s => s.address).filter(addr => addr);
+      
+      const tempMetadata = {
+        title,
+        description,
+        file: {
+          name: selectedFile.name,
+          path: filePath,
+          encrypted: true,
         }
-        const encryptedKey = await EthCrypto.encryptWithPublicKey(
-          pubKey.slice(2), // remove 0x
-          aesKey
-        );
-        const encryptedKeyString = EthCrypto.cipher.stringify(encryptedKey);
-        encryptedKeys[s.address] = encryptedKeyString;
+      };
+      const tempMetadataBlob = new Blob([JSON.stringify(tempMetadata)], { type: 'application/json' });
+      const tempFiles = [{ path: 'metadata.json', content: tempMetadataBlob }];
+      const tempDirHash = await uploadFolderToPinata(tempFiles);
+      
+      const tempExpiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
+      
+      let gasEstimate;
+      let gasConfig;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          gasEstimate = await contract.createDocument.estimateGas(tempDirHash, validSignerAddresses, tempExpiryTimestamp);
+          try {
+            const gasPrices = await fetchGasPrices();
+            gasConfig = getGasConfig(gasPrices, 'standard');
+          } catch (gasError) {
+            gasConfig = {
+              maxFeePerGas: ethers.parseUnits('50', 'gwei'),
+              maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
+            };
+          }
+          break;
+        } catch (err) {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            gasEstimate = 500000n;
+            gasConfig = {
+              maxFeePerGas: ethers.parseUnits('50', 'gwei'),
+              maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
+            };
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        }
       }
-      // 6. Document hash is computed on encrypted file
-      const documentHash = CryptoJS.SHA256(encrypted).toString();
-      // 7. Metadata
+      
+      const tempTx = await contract.createDocument(tempDirHash, validSignerAddresses, tempExpiryTimestamp, {
+        gasLimit: gasEstimate * 150n / 100n,
+        ...gasConfig
+      });
+      const receipt = await tempTx.wait();
+      
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = contract.interface.parseLog(log);
+          return parsed.name === 'DocumentCreated';
+        } catch {
+          return false;
+        }
+      });
+      
+      if (!event) {
+        throw new Error('Failed to get document ID from transaction');
+      }
+      
+      const parsedEvent = contract.interface.parseLog(event);
+      const docId = parsedEvent.args[0];
+      
+      const { encryptedFile, encryptedSymmetricKey, accessControlConditions } = 
+        await litProtocolService.instance.encryptFile(selectedFile, docId, uploaderAddress, validSignerAddresses);
+      
       const metadata = {
         title,
         description,
@@ -105,28 +163,29 @@ function DocumentUpload() {
           path: filePath,
           encrypted: true,
         },
-        documentHash,
-        encryptedKeys
+        litProtocol: {
+          encryptedSymmetricKey,
+          accessControlConditions
+        }
       };
+      
+      const encryptedBlob = new Blob([encryptedFile], { type: 'application/octet-stream' });
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
       const files = [
         { path: filePath, content: encryptedBlob },
         { path: 'metadata.json', content: metadataBlob },
       ];
-      dirHash = await uploadFolderToPinata(files);
-      if (!dirHash || dirHash.length === 0) {
-        throw new Error('Failed to upload to IPFS. No hash returned.');
+      const finalDirHash = await uploadFolderToPinata(files);
+      if (!finalDirHash || finalDirHash.length === 0) {
+        throw new Error('Failed to upload encrypted file to IPFS. No hash returned.');
       }
-      const network = await provider.getNetwork();
-      const expectedChainId = 80002; // Polygon Amoy testnet
-      if (network.chainId.toString() !== expectedChainId.toString()) {
-        throw new Error(`Please switch to Polygon Amoy testnet (Chain ID: ${expectedChainId}). Current network: ${network.name} (Chain ID: ${network.chainId})`);
-      }
+      
       try {
         await contract.documentCount();
       } catch (err) {
         throw new Error(`Contract not accessible at address ${CONTRACT_ADDRESS}. Please verify the contract is deployed on the current network.`);
       }
+      
       const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
       const validSigners = signers
         .map(s => s.address)
@@ -150,14 +209,45 @@ function DocumentUpload() {
           throw new Error(`Signer ${validSigners[i]} is not a registered user or profile fetch failed.`);
         }
       }
-      dispatch({
-        type: 'info',
-        message: `Attempting contract call with: IPFS Hash: ${dirHash.slice(0, 10)}..., Signers: ${validSigners.length}, Expiry: ${expiryTimestamp || 'None'}`,
-        title: 'Contract Call',
-        position: 'topR',
+      
+      let amendGasEstimate;
+      let amendGasConfig;
+      let amendRetryCount = 0;
+      const amendMaxRetries = 3;
+      
+      while (amendRetryCount < amendMaxRetries) {
+        try {
+          amendGasEstimate = await contract.amendDocument.estimateGas(docId, finalDirHash, expiryTimestamp);
+          try {
+            const gasPrices = await fetchGasPrices();
+            amendGasConfig = getGasConfig(gasPrices, 'standard');
+          } catch (gasError) {
+            amendGasConfig = {
+              maxFeePerGas: ethers.parseUnits('50', 'gwei'),
+              maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
+            };
+          }
+          break;
+        } catch (err) {
+          amendRetryCount++;
+          if (amendRetryCount >= amendMaxRetries) {
+            amendGasEstimate = 300000n;
+            amendGasConfig = {
+              maxFeePerGas: ethers.parseUnits('50', 'gwei'),
+              maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
+            };
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000 * amendRetryCount));
+        }
+      }
+      
+      const amendTx = await contract.amendDocument(docId, finalDirHash, expiryTimestamp, {
+        gasLimit: amendGasEstimate * 150n / 100n,
+        ...amendGasConfig
       });
-      const tx = await contract.createDocument(dirHash, validSigners, expiryTimestamp);
-      await tx.wait();
+      await amendTx.wait();
+      
       dispatch({
         type: 'success',
         message: 'Document uploaded and registered on-chain!',
@@ -172,8 +262,8 @@ function DocumentUpload() {
           title: 'Transaction Rejected',
           position: 'topR',
         });
-      } else if (dirHash) {
-        let errorMessage = `Folder uploaded to IPFS (hash: ${dirHash}) but contract call failed.`;
+      } else {
+        let errorMessage = 'Upload failed.';
         if (err.message && err.message.includes('IPFS hash required')) {
           errorMessage = 'IPFS hash is empty or invalid.';
         } else if (err.message && err.message.includes('At least one signer required')) {
@@ -189,9 +279,13 @@ function DocumentUpload() {
         } else if (err.message && err.message.includes('insufficient funds')) {
           errorMessage = 'Insufficient funds for gas. Please add more MATIC to your wallet.';
         } else if (err.message && err.message.includes('gas')) {
-          errorMessage = 'Gas estimation failed. Please try again or increase gas limit.';
+          errorMessage = 'Gas estimation failed. Please try again or check your network connection.';
+        } else if ((err.message && err.message.includes('internal json-rpc error')) || (err.message && err.message.includes('-32603'))) {
+          errorMessage = 'Network connection error. Please check your internet connection and try again.';
+        } else if (err.message && err.message.includes('execution reverted')) {
+          errorMessage = 'Transaction failed. Please check your input parameters and try again.';
         } else if (err.message) {
-          errorMessage += `\n\nError details: ${err.message}`;
+          errorMessage = err.message;
         }
         if (err.reason) {
           errorMessage += `\n\nRevert reason: ${err.reason}`;
@@ -202,14 +296,7 @@ function DocumentUpload() {
         dispatch({
           type: 'error',
           message: errorMessage || (err.message || JSON.stringify(err)),
-          title: 'Partial Upload',
-          position: 'topR',
-        });
-      } else {
-        dispatch({
-          type: 'error',
-          message: err.message || JSON.stringify(err) || 'Upload failed.',
-          title: 'Error',
+          title: 'Upload Failed',
           position: 'topR',
         });
       }
