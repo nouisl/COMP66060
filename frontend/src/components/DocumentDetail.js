@@ -5,14 +5,12 @@ import Docu3 from '../contracts/Docu3.json';
 import { uploadFolderToPinata } from '../utils/pinata';
 import { useNotification } from '@web3uikit/core';
 import { 
-  generateDocumentHash, 
   signDocumentHash, 
   verifySignature, 
   formatSignature,
   createVerificationMessage 
 } from '../utils/crypto';
-import EthCrypto from 'eth-crypto';
-import CryptoJS from 'crypto-js';
+import { litProtocolService } from '../utils/litProtocol';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
@@ -43,22 +41,15 @@ function DocumentDetail() {
   const [documentHash, setDocumentHash] = useState('');
   const [signatures, setSignatures] = useState({});
   const [signatureVerification, setSignatureVerification] = useState({});
-  const [showSignatureModal, setShowSignatureModal] = useState(false);
-  const [signatureLoading, setSignatureLoading] = useState(false);
-  const [debug, setDebug] = useState({});
-  const [debugTime, setDebugTime] = useState(Date.now());
 
   useEffect(() => {
-    setDebugTime(Date.now());
     async function fetchDoc() {
       setLoading(true);
       setError('');
       const docIdNum = Number(docId);
-      setDebug({ docId, docIdNum });
       if (!docId || isNaN(docIdNum) || docIdNum < 1) {
         setError('Invalid document ID.');
         setLoading(false);
-        setDebug(prev => ({ ...prev, error: 'Invalid document ID.' }));
         return;
       }
       try {
@@ -95,7 +86,6 @@ function DocumentDetail() {
         if (!isSigner && !isCreator) {
           setError('You are not authorized to view this document. Only signers and the document creator can access this page.');
           setLoading(false);
-          setDebug(prev => ({ ...prev, error: 'Not authorized' }));
           return;
         }
         
@@ -109,8 +99,8 @@ function DocumentDetail() {
             `https://ipfs.io/ipfs/${docObj.ipfsHash}/metadata.json`,
             `https://cloudflare-ipfs.com/ipfs/${docObj.ipfsHash}/docdir/metadata.json`,
             `https://cloudflare-ipfs.com/ipfs/${docObj.ipfsHash}/metadata.json`,
-            `https://brown-sparkling-sheep-903.mypinata.cloud/ipfs/${docObj.ipfsHash}/docdir/metadata.json`,
-            `https://brown-sparkling-sheep-903.mypinata.cloud/ipfs/${docObj.ipfsHash}/metadata.json`
+            `https://jade-voluntary-macaw-912.mypinata.cloud/ipfs/${docObj.ipfsHash}/docdir/metadata.json`,
+            `https://jade-voluntary-macaw-912.mypinata.cloud/ipfs/${docObj.ipfsHash}/metadata.json`
           ];
           for (const url of urls) {
             try {
@@ -155,12 +145,10 @@ function DocumentDetail() {
         }
         if (!meta) {
           setError('Metadata not found for this document.');
-          setDebug(prev => ({ ...prev, error: 'Metadata not found' }));
         }
       } catch (err) {
         const errorMessage = err.message || 'Failed to fetch document.';
         setError(errorMessage);
-        setDebug(prev => ({ ...prev, error: errorMessage }));
         dispatch({
           type: 'error',
           message: errorMessage,
@@ -172,7 +160,7 @@ function DocumentDetail() {
       }
     }
     fetchDoc();
-  }, [docId]);
+  }, [docId, dispatch]);
 
   useEffect(() => {
     // After fetching metadata, fetch and decrypt the file if encrypted
@@ -203,35 +191,39 @@ function DocumentDetail() {
         setDecryptedFileUrl(fileUrl);
         return;
       }
-      // Decrypt AES key for this user
-      const privateKey = localStorage.getItem('docu3_enc_privateKey');
-      if (!privateKey) return;
-      const encKeyString = metadata.encryptedKeys && metadata.encryptedKeys[account];
-      if (!encKeyString) return;
-      const encryptedKey = EthCrypto.cipher.parse(encKeyString);
-      const aesKey = await EthCrypto.decryptWithPrivateKey(privateKey, encryptedKey);
-      // Read encrypted file as text
-      const encryptedText = await fileBlob.text();
-      // Decrypt file with AES
-      const decrypted = CryptoJS.AES.decrypt(encryptedText, aesKey);
-      const decryptedWords = decrypted;
-      // Convert decrypted WordArray to Uint8Array
-      const uint8 = new Uint8Array(decryptedWords.words.length * 4);
-      for (let i = 0; i < decryptedWords.words.length; ++i) {
-        uint8[i * 4 + 0] = (decryptedWords.words[i] >> 24) & 0xff;
-        uint8[i * 4 + 1] = (decryptedWords.words[i] >> 16) & 0xff;
-        uint8[i * 4 + 2] = (decryptedWords.words[i] >> 8) & 0xff;
-        uint8[i * 4 + 3] = (decryptedWords.words[i]) & 0xff;
+      
+      // LIT PROTOCOL DECRYPTION
+      if (!metadata.litProtocol) {
+        setError('Document encrypted with old method. Please re-upload.');
+        return;
       }
-      const cleanUint8 = uint8.slice(0, decryptedWords.sigBytes);
-      const decryptedBlob = new Blob([cleanUint8], { type: 'application/octet-stream' });
-      fileUrl = URL.createObjectURL(decryptedBlob);
-      setDecryptedFileUrl(fileUrl);
+      
+      try {
+        const { encryptedSymmetricKey, accessControlConditions } = metadata.litProtocol;
+        const decryptedFile = await litProtocolService.instance.decryptFile(
+          await fileBlob.arrayBuffer(),
+          encryptedSymmetricKey,
+          accessControlConditions,
+          docId
+        );
+        
+        const decryptedBlob = new Blob([decryptedFile], { type: 'application/octet-stream' });
+        fileUrl = URL.createObjectURL(decryptedBlob);
+        setDecryptedFileUrl(fileUrl);
+      } catch (error) {
+        setError('Failed to decrypt document. You may not have access or need to connect your wallet.');
+        dispatch({
+          type: 'error',
+          message: 'Failed to decrypt document. You may not have access or need to connect your wallet.',
+          title: 'Decryption Error',
+          position: 'topR',
+        });
+      }
     }
     if (metadata && doc && account) {
       fetchAndDecrypt();
     }
-  }, [metadata, doc, account]);
+  }, [metadata, doc, account, docId, dispatch]);
 
   const handleSign = async () => {
     setSigning(true);
