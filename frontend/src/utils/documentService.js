@@ -25,29 +25,40 @@ class DocumentService {
       
       const docs = [];
       for (let i = 1; i <= count; i++) {
-        const [
-          ipfsHash,
-          creator,
-          signers,
-          createdAt,
-          signatureCount,
-          fullySigned,
-          isRevoked
-        ] = await contract.getDocument(i);
-        const docObj = {
-          ipfsHash,
-          creator,
-          signers,
-          createdAt,
-          signatureCount,
-          fullySigned,
-          isRevoked,
-          docId: i
-        };
-        const isSigner = signers && signers.map(addr => addr.toLowerCase()).includes(account?.toLowerCase());
-        const isCreator = creator && creator.toLowerCase() === account?.toLowerCase();
-        if (isSigner || isCreator) {
-          docs.push(docObj);
+        try {
+          const [
+            ipfsHash,
+            creator,
+            signers,
+            createdAt,
+            signatureCount,
+            fullySigned,
+            isRevoked
+          ] = await contract.getDocument(i);
+          
+          // Only include documents with valid IPFS hash
+          if (!ipfsHash || ipfsHash.trim() === '') {
+            continue;
+          }
+          
+          const docObj = {
+            ipfsHash,
+            creator,
+            signers,
+            createdAt,
+            signatureCount,
+            fullySigned,
+            isRevoked,
+            docId: i
+          };
+          const isSigner = signers && signers.map(addr => addr.toLowerCase()).includes(account?.toLowerCase());
+          const isCreator = creator && creator.toLowerCase() === account?.toLowerCase();
+          if (isSigner || isCreator) {
+            docs.push(docObj);
+          }
+        } catch (docError) {
+          // Skip documents that don't exist or have errors
+          continue;
         }
       }
       this.cache.set(cacheKey, docs);
