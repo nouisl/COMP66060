@@ -1,4 +1,6 @@
 import * as LitJsSdk from '@lit-protocol/lit-node-client';
+import { encryptString, decryptString, blobToBase64String, base64StringToBlob, uint8arrayToString } from '@lit-protocol/encryption';
+import { checkAndSignAuthMessage } from '@lit-protocol/auth-helpers';
 import { ethers } from 'ethers';
 import Docu3 from '../contracts/Docu3.json';
 
@@ -14,6 +16,8 @@ class LitProtocolService {
     try {
       this.litNodeClient = new LitJsSdk.LitNodeClient({
         litNetwork: 'datil-dev',
+        alertWhenUnauthorized: false,
+        debug: false,
       });
       await this.litNodeClient.connect();
       this.connected = true;
@@ -29,7 +33,7 @@ class LitProtocolService {
     }
     
     try {
-      const authSig = await LitJsSdk.checkAndSignAuthMessage({
+      const authSig = await checkAndSignAuthMessage({
         chain: 'amoy',
       });
       return authSig;
@@ -74,11 +78,12 @@ class LitProtocolService {
       const accessControlConditions = this.createAccessControlConditions(docId);
       
       const fileBuffer = await file.arrayBuffer();
-      
-      const { encryptedString, symmetricKey } = await LitJsSdk.encryptFile(
+      const fileString = new TextDecoder().decode(fileBuffer);
+
+      const { encryptedString, symmetricKey } = await encryptString(
         {
           accessControlConditions,
-          file: fileBuffer,
+          dataToEncrypt: fileString,
           authSig,
           chain: 'amoy',
         },
@@ -93,8 +98,8 @@ class LitProtocolService {
       });
 
       return {
-        encryptedFile: await LitJsSdk.blobToBase64String(encryptedString),
-        encryptedSymmetricKey: LitJsSdk.uint8arrayToString(
+        encryptedFile: await blobToBase64String(encryptedString),
+        encryptedSymmetricKey: uint8arrayToString(
           encryptedSymmetricKey,
           'base16'
         ),
@@ -120,14 +125,12 @@ class LitProtocolService {
         authSig,
       });
 
-      const decryptedFile = await LitJsSdk.decryptFile(
-        {
-          file: LitJsSdk.base64StringToBlob(encryptedFileBase64),
-          symmetricKey,
-        }
+      const decryptedString = await decryptString(
+        base64StringToBlob(encryptedFileBase64),
+        symmetricKey
       );
 
-      return decryptedFile;
+      return new TextEncoder().encode(decryptedString);
     } catch (error) {
       throw new Error(`Decryption failed: ${error.message || error.toString()}`);
     }
@@ -150,71 +153,6 @@ class LitProtocolService {
       return isCreator || isSigner;
     } catch (error) {
       return false;
-    }
-  }
-
-  async testConnection() {
-    try {
-      await this.connect();
-      return {
-        success: true,
-        message: 'Lit Protocol connection successful',
-        litNetwork: 'datil-dev',
-        chain: 'amoy'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message || error.toString() || 'Unknown error occurred',
-        error: error,
-        litNetwork: 'datil-dev',
-        chain: 'amoy'
-      };
-    }
-  }
-
-  async testEncryption() {
-    try {
-      if (!this.litNodeClient) {
-        await this.connect();
-      }
-      
-      const authSig = await this.getAuthSig();
-      const testAccessControlConditions = this.createAccessControlConditions('1');
-
-      const testString = 'test content';
-      const testBlob = new Blob([testString], { type: 'text/plain' });
-      
-      const { encryptedString, symmetricKey } = await LitJsSdk.encryptFile(
-        {
-          accessControlConditions: testAccessControlConditions,
-          file: testBlob,
-          authSig,
-          chain: 'amoy',
-        },
-        this.litNodeClient
-      );
-
-      const encryptedSymmetricKey = await this.litNodeClient.saveEncryptionKey({
-        accessControlConditions: testAccessControlConditions,
-        symmetricKey,
-        authSig,
-        chain: 'amoy',
-      });
-
-      return {
-        success: true,
-        message: 'Lit Protocol encryption test successful',
-        ciphertext: encryptedString ? 'Present' : 'Missing',
-        dataToEncryptHash: encryptedSymmetricKey ? 'Present' : 'Missing'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message || error.toString() || 'Unknown error occurred',
-        error: error,
-        stack: error.stack
-      };
     }
   }
 }
