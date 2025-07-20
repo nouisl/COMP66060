@@ -36,8 +36,44 @@ class DocumentService {
             isRevoked
           ] = await contract.getDocument(i);
           
-          // Only include documents with valid IPFS hash
+          if (isRevoked) {
+            continue;
+          }
+          
           if (!ipfsHash || ipfsHash.trim() === '') {
+            continue;
+          }
+          
+          let hasValidMetadata = false;
+          try {
+            const metadataUrls = [
+              `https://ipfs.io/ipfs/${ipfsHash}/metadata.json`,
+              `https://cloudflare-ipfs.com/ipfs/${ipfsHash}/metadata.json`,
+              `https://jade-voluntary-macaw-912.mypinata.cloud/ipfs/${ipfsHash}/metadata.json`
+            ];
+            
+            for (const url of metadataUrls) {
+              try {
+                const response = await fetch(url);
+                if (response.ok) {
+                  const metadata = await response.json();
+                  if (metadata.litProtocol && 
+                      metadata.litProtocol.encryptedSymmetricKey && 
+                      metadata.litProtocol.accessControlConditions &&
+                      metadata.file && 
+                      metadata.file.encrypted === true) {
+                    hasValidMetadata = true;
+                    break;
+                  }
+                }
+              } catch (e) {
+              }
+            }
+          } catch (e) {
+            continue;
+          }
+          
+          if (!hasValidMetadata) {
             continue;
           }
           
@@ -57,7 +93,6 @@ class DocumentService {
             docs.push(docObj);
           }
         } catch (docError) {
-          // Skip documents that don't exist or have errors
           continue;
         }
       }
