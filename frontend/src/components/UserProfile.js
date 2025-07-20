@@ -25,8 +25,6 @@ function UserProfile() {
     fetchProfile();
   }, [account]);
 
-
-
   if (loading) return <div className="text-center py-8">Loading profile...</div>;
 
   return (
