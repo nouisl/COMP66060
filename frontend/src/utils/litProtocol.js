@@ -1,12 +1,8 @@
-import { LitNodeClient } from '@lit-protocol/lit-node-client';
+import * as LitJsSdk from '@lit-protocol/lit-node-client';
 import { ethers } from 'ethers';
 import Docu3 from '../contracts/Docu3.json';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
-
-if (!CONTRACT_ADDRESS) {
-  throw new Error('REACT_APP_CONTRACT_ADDRESS environment variable is not set');
-}
 
 class LitProtocolService {
   constructor() {
@@ -14,128 +10,127 @@ class LitProtocolService {
     this.connected = false;
   }
 
-  async initialize() {
-    if (!this.litNodeClient) {
-      this.litNodeClient = new LitNodeClient({
-        litNetwork: 'cayenne',
-        debug: false
+  async connect() {
+    try {
+      this.litNodeClient = new LitJsSdk.LitNodeClient({
+        litNetwork: 'datil-dev',
       });
+      await this.litNodeClient.connect();
+      this.connected = true;
+    } catch (error) {
+      this.connected = false;
+      throw new Error(`Failed to connect to Lit Protocol: ${error.message || error.toString()}`);
     }
   }
 
-  async connect() {
-    await this.initialize();
-    if (this.connected) return;
-    await this.litNodeClient.connect();
-    this.connected = true;
-  }
-
-  async getAuthSig(signer) {
+  async getAuthSig() {
     if (!window.ethereum) {
       throw new Error('No wallet found. Please connect your wallet first.');
     }
     
-    const chainId = 80002;
-    
-    const authSig = await this.litNodeClient.signAndSaveAuthMessage({
-      chainId,
-      expiration: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
-      resourceAbilityRequests: [
-        {
-          resource: new Request('https://docu3.app'),
-          ability: 'AccessControl'
-        }
-      ],
-      wallet: signer
-    });
-
-    return authSig;
+    try {
+      const authSig = await LitJsSdk.checkAndSignAuthMessage({
+        chain: 'amoy',
+      });
+      return authSig;
+    } catch (error) {
+      throw new Error(`Failed to get auth signature: ${error.message || error.toString()}`);
+    }
   }
 
-  async createAccessControlConditions(docId, uploaderAddress, signerAddresses) {
+  createAccessControlConditions(docId) {
+    if (!CONTRACT_ADDRESS) {
+      throw new Error('Contract address not configured. Please set REACT_APP_CONTRACT_ADDRESS environment variable.');
+    }
+    
+    const isSignerAbi = Docu3.abi.find(abi => abi.name === 'isSigner' && abi.type === 'function');
+    if (!isSignerAbi) {
+      throw new Error('isSigner function not found in contract ABI');
+    }
+    
     return [
       {
-        contractAddress: CONTRACT_ADDRESS,
-        standardContractType: 'CustomContract',
         chain: 'amoy',
-        method: 'isSigner',
-        parameters: [':userAddress', docId.toString()],
+        contractAddress: CONTRACT_ADDRESS,
+        functionName: 'isSigner',
+        functionParams: [':userAddress', docId.toString()],
+        functionAbi: isSignerAbi,
         returnValueTest: {
-          comparator: '=',
-          value: 'true'
-        }
+          comparator: '==',
+          value: true,
+        },
+        standardContractType: '',
       }
     ];
   }
 
   async encryptFile(file, docId, uploaderAddress, signerAddresses) {
-    if (!window.ethereum) {
-      throw new Error('No wallet found. Please connect your wallet first.');
+    if (!this.litNodeClient) {
+      await this.connect();
     }
-    
-    await this.connect();
-    
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const authSig = await this.getAuthSig(signer);
 
-    const accessControlConditions = await this.createAccessControlConditions(
-      docId, 
-      uploaderAddress, 
-      signerAddresses
-    );
+    try {
+      const authSig = await this.getAuthSig();
+      const accessControlConditions = this.createAccessControlConditions(docId);
+      
+      const fileBuffer = await file.arrayBuffer();
+      
+      const { encryptedString, symmetricKey } = await LitJsSdk.encryptFile(
+        {
+          accessControlConditions,
+          file: fileBuffer,
+          authSig,
+          chain: 'amoy',
+        },
+        this.litNodeClient
+      );
 
-    const fileBuffer = await file.arrayBuffer();
-    
-    const { symmetricKey } = await this.litNodeClient.generateSymmetricKey({
-      chain: 'amoy',
-      accessControlConditions,
-      authSig
-    });
+      const encryptedSymmetricKey = await this.litNodeClient.saveEncryptionKey({
+        accessControlConditions,
+        symmetricKey,
+        authSig,
+        chain: 'amoy',
+      });
 
-    const encryptedFile = await this.litNodeClient.encryptFile({
-      file: fileBuffer,
-      symmetricKey
-    });
-
-    const encryptedSymmetricKey = await this.litNodeClient.saveEncryptionKey({
-      accessControlConditions,
-      symmetricKey,
-      authSig,
-      chain: 'amoy'
-    });
-
-    return {
-      encryptedFile,
-      encryptedSymmetricKey: encryptedSymmetricKey,
-      accessControlConditions
-    };
+      return {
+        encryptedFile: await LitJsSdk.blobToBase64String(encryptedString),
+        encryptedSymmetricKey: LitJsSdk.uint8arrayToString(
+          encryptedSymmetricKey,
+          'base16'
+        ),
+        accessControlConditions
+      };
+    } catch (error) {
+      throw new Error(`Encryption failed: ${error.message || error.toString()}`);
+    }
   }
 
-  async decryptFile(encryptedFile, encryptedSymmetricKey, accessControlConditions, docId) {
-    if (!window.ethereum) {
-      throw new Error('No wallet found. Please connect your wallet first.');
+  async decryptFile(encryptedFileBase64, encryptedSymmetricKey, accessControlConditions, docId) {
+    if (!this.litNodeClient) {
+      await this.connect();
     }
-    
-    await this.connect();
-    
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const authSig = await this.getAuthSig(signer);
 
-    const symmetricKey = await this.litNodeClient.getSymmetricKey({
-      chain: 'amoy',
-      accessControlConditions,
-      authSig,
-      encryptedSymmetricKey
-    });
+    try {
+      const authSig = await this.getAuthSig();
 
-    const decryptedFile = await this.litNodeClient.decryptFile({
-      file: encryptedFile,
-      symmetricKey
-    });
+      const symmetricKey = await this.litNodeClient.getEncryptionKey({
+        accessControlConditions,
+        toDecrypt: encryptedSymmetricKey,
+        chain: 'amoy',
+        authSig,
+      });
 
-    return decryptedFile;
+      const decryptedFile = await LitJsSdk.decryptFile(
+        {
+          file: LitJsSdk.base64StringToBlob(encryptedFileBase64),
+          symmetricKey,
+        }
+      );
+
+      return decryptedFile;
+    } catch (error) {
+      throw new Error(`Decryption failed: ${error.message || error.toString()}`);
+    }
   }
 
   async checkAccess(docId, userAddress) {
@@ -155,6 +150,71 @@ class LitProtocolService {
       return isCreator || isSigner;
     } catch (error) {
       return false;
+    }
+  }
+
+  async testConnection() {
+    try {
+      await this.connect();
+      return {
+        success: true,
+        message: 'Lit Protocol connection successful',
+        litNetwork: 'datil-dev',
+        chain: 'amoy'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || error.toString() || 'Unknown error occurred',
+        error: error,
+        litNetwork: 'datil-dev',
+        chain: 'amoy'
+      };
+    }
+  }
+
+  async testEncryption() {
+    try {
+      if (!this.litNodeClient) {
+        await this.connect();
+      }
+      
+      const authSig = await this.getAuthSig();
+      const testAccessControlConditions = this.createAccessControlConditions('1');
+
+      const testString = 'test content';
+      const testBlob = new Blob([testString], { type: 'text/plain' });
+      
+      const { encryptedString, symmetricKey } = await LitJsSdk.encryptFile(
+        {
+          accessControlConditions: testAccessControlConditions,
+          file: testBlob,
+          authSig,
+          chain: 'amoy',
+        },
+        this.litNodeClient
+      );
+
+      const encryptedSymmetricKey = await this.litNodeClient.saveEncryptionKey({
+        accessControlConditions: testAccessControlConditions,
+        symmetricKey,
+        authSig,
+        chain: 'amoy',
+      });
+
+      return {
+        success: true,
+        message: 'Lit Protocol encryption test successful',
+        ciphertext: encryptedString ? 'Present' : 'Missing',
+        dataToEncryptHash: encryptedSymmetricKey ? 'Present' : 'Missing'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || error.toString() || 'Unknown error occurred',
+        error: error,
+        stack: error.stack
+      };
     }
   }
 }
