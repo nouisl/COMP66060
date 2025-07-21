@@ -5,10 +5,6 @@
     "hardhat": "^2.24.1"
   },
   "dependencies": {
-    "@lit-protocol/auth-helpers": "^7.2.0",
-    "@lit-protocol/constants": "^7.2.0",
-    "@lit-protocol/contracts-sdk": "^7.2.0",
-    "@lit-protocol/lit-node-client": "^7.2.0",
     "@orbisclub/orbis-sdk": "^0.4.89",
     "@pinata/sdk": "^2.1.0",
     "eth-crypto": "^3.1.0",
