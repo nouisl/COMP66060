@@ -10,7 +10,7 @@ import {
   formatSignature,
   createVerificationMessage 
 } from '../utils/crypto';
-import { litProtocolService } from '../utils/litProtocol';
+import { ethCryptoService } from '../utils/ethCryptoService';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
@@ -193,21 +193,24 @@ function DocumentDetail() {
       }
       
       // LIT PROTOCOL DECRYPTION
-      if (!metadata.litProtocol) {
+      if (!metadata.ethCrypto) {
         setError('Document encrypted with old method. Please re-upload.');
         return;
       }
       
       try {
-        const { encryptedSymmetricKey, accessControlConditions } = metadata.litProtocol;
-        const decryptedFile = await litProtocolService.instance.decryptFile(
-          await fileBlob.arrayBuffer(),
-          encryptedSymmetricKey,
-          accessControlConditions,
-          docId
+        const encryptedKeys = metadata.ethCrypto?.encryptedKeys;
+        const fileArrayBuffer = await fileBlob.arrayBuffer();
+        const encryptedFile = new TextDecoder().decode(new Uint8Array(fileArrayBuffer));
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const decryptedData = await ethCryptoService.instance.decryptFile(
+          encryptedFile,
+          encryptedKeys,
+          account,
+          signer
         );
-        
-        const decryptedBlob = new Blob([decryptedFile], { type: 'application/octet-stream' });
+        const decryptedBlob = new Blob([decryptedData], { type: 'application/octet-stream' });
         fileUrl = URL.createObjectURL(decryptedBlob);
         setDecryptedFileUrl(fileUrl);
       } catch (error) {

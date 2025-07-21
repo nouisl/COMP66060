@@ -5,7 +5,7 @@ import { uploadFolderToPinata } from '../utils/pinata';
 import { useNotification } from '@web3uikit/core';
 import { fetchGasPrices, getGasConfig } from '../utils/gasStation';
 
-import { litProtocolService } from '../utils/litProtocol';
+import { ethCryptoService } from '../utils/ethCryptoService';
 
 function DocumentUpload() {
   const [error, setError] = useState('');
@@ -50,6 +50,7 @@ function DocumentUpload() {
     setSuccess('');
     setUploading(true);
     let provider, signer, uploaderAddress, contract;
+    let docId; // Define docId at the top
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
@@ -83,78 +84,25 @@ function DocumentUpload() {
       
       const validSignerAddresses = signers.map(s => s.address).filter(addr => addr);
       
-      const tempMetadata = {
-        title,
-        description,
-        file: {
-          name: selectedFile.name,
-          path: filePath,
-          encrypted: true,
-        }
-      };
-      const tempMetadataBlob = new Blob([JSON.stringify(tempMetadata)], { type: 'application/json' });
-      const tempFiles = [{ path: 'metadata.json', content: tempMetadataBlob }];
-      const tempDirHash = await uploadFolderToPinata(tempFiles);
-      
-      const tempExpiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
-      
-      let gasEstimate;
-      let gasConfig;
-      let retryCount = 0;
-      const maxRetries = 3;
-      
-      while (retryCount < maxRetries) {
+
+      // Remove any connect call
+      // Only use encryptFile
+      let encryptedFile, encryptedKeys;
+      try {
+        const encryptionResult = await ethCryptoService.instance.encryptFile(selectedFile, uploaderAddress, validSignerAddresses);
+        encryptedFile = encryptionResult.encryptedFile;
+        encryptedKeys = encryptionResult.encryptedKeys;
+      } catch (encryptionError) {
         try {
-          gasEstimate = await contract.createDocument.estimateGas(tempDirHash, validSignerAddresses, tempExpiryTimestamp);
-          try {
-            const gasPrices = await fetchGasPrices();
-            gasConfig = getGasConfig(gasPrices, 'standard');
-          } catch (gasError) {
-            gasConfig = {
-              maxFeePerGas: ethers.parseUnits('50', 'gwei'),
-              maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
-            };
+          if (docId) {
+            const revokeTx = await contract.revokeDocument(docId, "Encryption failed");
+            await revokeTx.wait();
           }
-          break;
-        } catch (err) {
-          retryCount++;
-          if (retryCount >= maxRetries) {
-            gasEstimate = 500000n;
-            gasConfig = {
-              maxFeePerGas: ethers.parseUnits('50', 'gwei'),
-              maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
-            };
-            break;
-          }
-          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        } catch (revokeError) {
+          throw new Error(`File encryption failed and document could not be revoked.${docId ? ' Document ID: ' + docId + '.' : ''} Please contact support.`);
         }
+        throw new Error(`File encryption failed: ${encryptionError.message}. Document${docId ? ' ' + docId : ''} has been revoked. Please try again or check your wallet connection.`);
       }
-      
-      const tempTx = await contract.createDocument(tempDirHash, validSignerAddresses, tempExpiryTimestamp, {
-        gasLimit: gasEstimate * 150n / 100n,
-        ...gasConfig
-      });
-      const receipt = await tempTx.wait();
-      
-      const event = receipt.logs.find(log => {
-        try {
-          const parsed = contract.interface.parseLog(log);
-          return parsed.name === 'DocumentCreated';
-        } catch {
-          return false;
-        }
-      });
-      
-      if (!event) {
-        throw new Error('Failed to get document ID from transaction');
-      }
-      
-      const parsedEvent = contract.interface.parseLog(event);
-      const docId = parsedEvent.args[0];
-      
-      const { encryptedFile, encryptedSymmetricKey, accessControlConditions } = 
-        await litProtocolService.instance.encryptFile(selectedFile, docId, uploaderAddress, validSignerAddresses);
-      
       const metadata = {
         title,
         description,
@@ -163,21 +111,35 @@ function DocumentUpload() {
           path: filePath,
           encrypted: true,
         },
-        litProtocol: {
-          encryptedSymmetricKey,
-          accessControlConditions
+        ethCrypto: {
+          encryptedKeys
         }
       };
-      
       const encryptedBlob = new Blob([encryptedFile], { type: 'application/octet-stream' });
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
       const files = [
         { path: filePath, content: encryptedBlob },
         { path: 'metadata.json', content: metadataBlob },
       ];
-      const finalDirHash = await uploadFolderToPinata(files);
-      if (!finalDirHash || finalDirHash.length === 0) {
-        throw new Error('Failed to upload encrypted file to IPFS. No hash returned.');
+      
+      // Upload encrypted file to IPFS
+      let finalDirHash;
+      try {
+        finalDirHash = await uploadFolderToPinata(files);
+        if (!finalDirHash || finalDirHash.length === 0) {
+          throw new Error('No hash returned from IPFS upload');
+        }
+      } catch (uploadError) {
+
+        try {
+          const revokeTx = await contract.revokeDocument(docId, "IPFS upload failed");
+          await revokeTx.wait();
+        } catch (revokeError) {
+
+          throw new Error(`Failed to upload encrypted file to IPFS and document could not be revoked. Document ID: ${docId}. Please contact support.`);
+        }
+        
+        throw new Error(`Failed to upload encrypted file to IPFS: ${uploadError.message}. Document has been revoked.`);
       }
       
       try {
@@ -410,6 +372,7 @@ function DocumentUpload() {
           </div>
           {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded mb-2">{error}</div>}
           {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded mb-2">{success}</div>}
+          
           <button
             type="submit"
             className={`w-full px-6 py-3 rounded-lg font-semibold transition-colors 
