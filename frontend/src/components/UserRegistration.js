@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { Web3Context } from '../context/Web3Context';
 import { fetchGasPrices, getGasConfig } from '../utils/gasStation';
+import EthCrypto from 'eth-crypto';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function UserRegistration() {
@@ -73,13 +74,22 @@ function UserRegistration() {
       let tx;
       let retryCount = 0;
       const maxRetries = 3;
-      
+      const userAddress = await signer.getAddress();
+      const message = 'Registering for Docu3';
+      const signature = await window.ethereum.request({
+        method: 'personal_sign',
+        params: [message, userAddress]
+      });
+      const publicKey = EthCrypto.recoverPublicKey(
+        EthCrypto.hash.keccak256(message),
+        signature
+      );
       const attemptTransaction = async () => {
-        const gasEstimate = await contractWithSigner.registerUser.estimateGas(firstName, familyName, normalizedEmail, dobTimestamp, '');
+        const gasEstimate = await contractWithSigner.registerUser.estimateGas(firstName, familyName, normalizedEmail, dobTimestamp, publicKey);
         try {
           const gasPrices = await fetchGasPrices();
           const gasConfig = getGasConfig(gasPrices, 'standard');
-          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, '', {
+          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, publicKey, {
             gasLimit: gasEstimate * 150n / 100n,
             ...gasConfig
           });
@@ -88,7 +98,7 @@ function UserRegistration() {
             maxFeePerGas: ethers.parseUnits('50', 'gwei'),
             maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
           };
-          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, '', {
+          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, publicKey, {
             gasLimit: gasEstimate * 150n / 100n,
             ...fallbackGasConfig
           });
