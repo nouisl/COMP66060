@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { Web3Context } from '../context/Web3Context';
 import { fetchGasPrices, getGasConfig } from '../utils/gasStation';
-import EthCrypto from 'eth-crypto';
+
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function UserRegistration() {
@@ -80,16 +80,13 @@ function UserRegistration() {
         method: 'personal_sign',
         params: [message, userAddress]
       });
-      const publicKey = EthCrypto.recoverPublicKey(
-        EthCrypto.hash.keccak256(message),
-        signature
-      );
+      
       const attemptTransaction = async () => {
-        const gasEstimate = await contractWithSigner.registerUser.estimateGas(firstName, familyName, normalizedEmail, dobTimestamp, publicKey);
+        const gasEstimate = await contractWithSigner.registerUser.estimateGas(firstName, familyName, normalizedEmail, dobTimestamp);
         try {
           const gasPrices = await fetchGasPrices();
           const gasConfig = getGasConfig(gasPrices, 'standard');
-          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, publicKey, {
+          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, {
             gasLimit: gasEstimate * 150n / 100n,
             ...gasConfig
           });
@@ -98,7 +95,7 @@ function UserRegistration() {
             maxFeePerGas: ethers.parseUnits('50', 'gwei'),
             maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
           };
-          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, publicKey, {
+          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, {
             gasLimit: gasEstimate * 150n / 100n,
             ...fallbackGasConfig
           });
@@ -182,7 +179,7 @@ function UserRegistration() {
         return;
       }
       if (msg.toLowerCase().includes('insufficient funds')) {
-        msg = 'You do not have enough MATIC to complete registration. Please add funds to your wallet.';
+        msg = 'You do not have enough POL to complete registration. Please add funds to your wallet.';
       } else if (msg.toLowerCase().includes('gas') || msg.toLowerCase().includes('execution reverted')) {
         msg = 'Transaction failed. Please try again or check your network connection.';
       } else if (msg.toLowerCase().includes('internal json-rpc error') || msg.toLowerCase().includes('-32603')) {

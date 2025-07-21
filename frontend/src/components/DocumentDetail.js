@@ -10,7 +10,6 @@ import {
   formatSignature,
   createVerificationMessage 
 } from '../utils/crypto';
-import { ethCryptoService } from '../utils/ethCryptoService';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 

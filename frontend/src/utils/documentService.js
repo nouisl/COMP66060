@@ -44,38 +44,6 @@ class DocumentService {
             continue;
           }
           
-          let hasValidMetadata = false;
-          try {
-            const metadataUrls = [
-              `https://ipfs.io/ipfs/${ipfsHash}/metadata.json`,
-              `https://cloudflare-ipfs.com/ipfs/${ipfsHash}/metadata.json`,
-              `https://jade-voluntary-macaw-912.mypinata.cloud/ipfs/${ipfsHash}/metadata.json`
-            ];
-            
-            for (const url of metadataUrls) {
-              try {
-                const response = await fetch(url);
-                if (response.ok) {
-                  const metadata = await response.json();
-                  if (metadata.ethCrypto && 
-                      metadata.ethCrypto.encryptedKeys && 
-                      metadata.file && 
-                      metadata.file.encrypted === true) {
-                    hasValidMetadata = true;
-                    break;
-                  }
-                }
-              } catch (e) {
-              }
-            }
-          } catch (e) {
-            continue;
-          }
-          
-          if (!hasValidMetadata) {
-            continue;
-          }
-          
           const docObj = {
             ipfsHash,
             creator,

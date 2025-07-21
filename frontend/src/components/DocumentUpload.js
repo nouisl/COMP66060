@@ -5,8 +5,6 @@ import { uploadFolderToPinata } from '../utils/pinata';
 import { useNotification } from '@web3uikit/core';
 import { fetchGasPrices, getGasConfig } from '../utils/gasStation';
 
-import { ethCryptoService } from '../utils/ethCryptoService';
-
 function DocumentUpload() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -87,38 +85,20 @@ function DocumentUpload() {
 
       // Remove any connect call
       // Only use encryptFile
-      let encryptedFile, encryptedKeys;
-      try {
-        const encryptionResult = await ethCryptoService.instance.encryptFile(selectedFile, uploaderAddress, validSignerAddresses);
-        encryptedFile = encryptionResult.encryptedFile;
-        encryptedKeys = encryptionResult.encryptedKeys;
-      } catch (encryptionError) {
-        try {
-          if (docId) {
-            const revokeTx = await contract.revokeDocument(docId, "Encryption failed");
-            await revokeTx.wait();
-          }
-        } catch (revokeError) {
-          throw new Error(`File encryption failed and document could not be revoked.${docId ? ' Document ID: ' + docId + '.' : ''} Please contact support.`);
-        }
-        throw new Error(`File encryption failed: ${encryptionError.message}. Document${docId ? ' ' + docId : ''} has been revoked. Please try again or check your wallet connection.`);
-      }
+      // Remove all encryption logic, upload file as-is
       const metadata = {
         title,
         description,
         file: {
           name: selectedFile.name,
           path: filePath,
-          encrypted: true,
-        },
-        ethCrypto: {
-          encryptedKeys
+          encrypted: false,
         }
       };
-      const encryptedBlob = new Blob([encryptedFile], { type: 'application/octet-stream' });
+      const fileBlob = selectedFile;
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
       const files = [
-        { path: filePath, content: encryptedBlob },
+        { path: filePath, content: fileBlob },
         { path: 'metadata.json', content: metadataBlob },
       ];
       

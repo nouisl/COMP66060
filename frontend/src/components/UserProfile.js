@@ -36,13 +36,6 @@ function UserProfile() {
           <div><strong>Family Name:</strong> {profile.familyName}</div>
           <div><strong>Email:</strong> {profile.email}</div>
           <div><strong>Date of Birth:</strong> {profile.dob && new Date(Number(profile.dob) * 1000).toLocaleDateString()}</div>
-          <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h3 className="text-lg font-semibold mb-2 text-blue-900">🔐 Decentralized Encryption</h3>
-            <p className="text-sm text-blue-700">
-              Your documents are now encrypted using decentralized, Ethereum-based encryption. 
-              Only you and authorized signers can decrypt files using your Ethereum wallet.
-            </p>
-          </div>
         </div>
       ) : (
         <div className="text-gray-500">No profile found.</div>
