@@ -25,29 +25,74 @@ class DocumentService {
       
       const docs = [];
       for (let i = 1; i <= count; i++) {
-        const [
-          ipfsHash,
-          creator,
-          signers,
-          createdAt,
-          signatureCount,
-          fullySigned,
-          isRevoked
-        ] = await contract.getDocument(i);
-        const docObj = {
-          ipfsHash,
-          creator,
-          signers,
-          createdAt,
-          signatureCount,
-          fullySigned,
-          isRevoked,
-          docId: i
-        };
-        const isSigner = signers && signers.map(addr => addr.toLowerCase()).includes(account?.toLowerCase());
-        const isCreator = creator && creator.toLowerCase() === account?.toLowerCase();
-        if (isSigner || isCreator) {
-          docs.push(docObj);
+        try {
+          const [
+            ipfsHash,
+            creator,
+            signers,
+            createdAt,
+            signatureCount,
+            fullySigned,
+            isRevoked
+          ] = await contract.getDocument(i);
+          
+          if (isRevoked) {
+            continue;
+          }
+          
+          if (!ipfsHash || ipfsHash.trim() === '') {
+            continue;
+          }
+          
+          let hasValidMetadata = false;
+          try {
+            const metadataUrls = [
+              `https://ipfs.io/ipfs/${ipfsHash}/metadata.json`,
+              `https://cloudflare-ipfs.com/ipfs/${ipfsHash}/metadata.json`,
+              `https://jade-voluntary-macaw-912.mypinata.cloud/ipfs/${ipfsHash}/metadata.json`
+            ];
+            
+            for (const url of metadataUrls) {
+              try {
+                const response = await fetch(url);
+                if (response.ok) {
+                  const metadata = await response.json();
+                  if (metadata.ethCrypto && 
+                      metadata.ethCrypto.encryptedKeys && 
+                      metadata.file && 
+                      metadata.file.encrypted === true) {
+                    hasValidMetadata = true;
+                    break;
+                  }
+                }
+              } catch (e) {
+              }
+            }
+          } catch (e) {
+            continue;
+          }
+          
+          if (!hasValidMetadata) {
+            continue;
+          }
+          
+          const docObj = {
+            ipfsHash,
+            creator,
+            signers,
+            createdAt,
+            signatureCount,
+            fullySigned,
+            isRevoked,
+            docId: i
+          };
+          const isSigner = signers && signers.map(addr => addr.toLowerCase()).includes(account?.toLowerCase());
+          const isCreator = creator && creator.toLowerCase() === account?.toLowerCase();
+          if (isSigner || isCreator) {
+            docs.push(docObj);
+          }
+        } catch (docError) {
+          continue;
         }
       }
       this.cache.set(cacheKey, docs);

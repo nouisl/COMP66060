@@ -3,15 +3,14 @@ import { useParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 import Docu3 from '../contracts/Docu3.json';
 import { uploadFolderToPinata } from '../utils/pinata';
-import CryptoJS from 'crypto-js';
 import { useNotification } from '@web3uikit/core';
 import { 
-  generateDocumentHash, 
   signDocumentHash, 
   verifySignature, 
   formatSignature,
   createVerificationMessage 
 } from '../utils/crypto';
+import { ethCryptoService } from '../utils/ethCryptoService';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
@@ -39,27 +38,18 @@ function DocumentDetail() {
   const [amendFile, setAmendFile] = useState(null);
   const [showAmendForm, setShowAmendForm] = useState(false);
   const [decryptedFileUrl, setDecryptedFileUrl] = useState(null);
-  const [decrypting, setDecrypting] = useState(false);
-  const [decryptionError, setDecryptionError] = useState('');
   const [documentHash, setDocumentHash] = useState('');
   const [signatures, setSignatures] = useState({});
   const [signatureVerification, setSignatureVerification] = useState({});
-  const [showSignatureModal, setShowSignatureModal] = useState(false);
-  const [signatureLoading, setSignatureLoading] = useState(false);
-  const [debug, setDebug] = useState({});
-  const [debugTime, setDebugTime] = useState(Date.now());
 
   useEffect(() => {
-    setDebugTime(Date.now());
     async function fetchDoc() {
       setLoading(true);
       setError('');
       const docIdNum = Number(docId);
-      setDebug({ docId, docIdNum });
       if (!docId || isNaN(docIdNum) || docIdNum < 1) {
         setError('Invalid document ID.');
         setLoading(false);
-        setDebug(prev => ({ ...prev, error: 'Invalid document ID.' }));
         return;
       }
       try {
@@ -96,7 +86,6 @@ function DocumentDetail() {
         if (!isSigner && !isCreator) {
           setError('You are not authorized to view this document. Only signers and the document creator can access this page.');
           setLoading(false);
-          setDebug(prev => ({ ...prev, error: 'Not authorized' }));
           return;
         }
         
@@ -110,8 +99,8 @@ function DocumentDetail() {
             `https://ipfs.io/ipfs/${docObj.ipfsHash}/metadata.json`,
             `https://cloudflare-ipfs.com/ipfs/${docObj.ipfsHash}/docdir/metadata.json`,
             `https://cloudflare-ipfs.com/ipfs/${docObj.ipfsHash}/metadata.json`,
-            `https://brown-sparkling-sheep-903.mypinata.cloud/ipfs/${docObj.ipfsHash}/docdir/metadata.json`,
-            `https://brown-sparkling-sheep-903.mypinata.cloud/ipfs/${docObj.ipfsHash}/metadata.json`
+            `https://jade-voluntary-macaw-912.mypinata.cloud/ipfs/${docObj.ipfsHash}/docdir/metadata.json`,
+            `https://jade-voluntary-macaw-912.mypinata.cloud/ipfs/${docObj.ipfsHash}/metadata.json`
           ];
           for (const url of urls) {
             try {
@@ -156,12 +145,10 @@ function DocumentDetail() {
         }
         if (!meta) {
           setError('Metadata not found for this document.');
-          setDebug(prev => ({ ...prev, error: 'Metadata not found' }));
         }
       } catch (err) {
         const errorMessage = err.message || 'Failed to fetch document.';
         setError(errorMessage);
-        setDebug(prev => ({ ...prev, error: errorMessage }));
         dispatch({
           type: 'error',
           message: errorMessage,
@@ -173,7 +160,73 @@ function DocumentDetail() {
       }
     }
     fetchDoc();
-  }, [docId]);
+  }, [docId, dispatch]);
+
+  useEffect(() => {
+    // After fetching metadata, fetch and decrypt the file if encrypted
+    async function fetchAndDecrypt() {
+      if (!metadata || !metadata.file || !metadata.file.path) return;
+      let encrypted = false;
+      if (metadata.file.encrypted) encrypted = true;
+      let fileBlob = null;
+      let fileUrl = null;
+      let fileFetched = false;
+      const urls = [
+        `https://brown-sparkling-sheep-903.mypinata.cloud/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`,
+        `https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`
+      ];
+      for (const url of urls) {
+        try {
+          const res = await fetch(url);
+          if (res.ok) {
+            fileBlob = await res.blob();
+            fileFetched = true;
+            break;
+          }
+        } catch (e) {}
+      }
+      if (!fileFetched) return;
+      if (!encrypted) {
+        fileUrl = URL.createObjectURL(fileBlob);
+        setDecryptedFileUrl(fileUrl);
+        return;
+      }
+      
+      // LIT PROTOCOL DECRYPTION
+      if (!metadata.ethCrypto) {
+        setError('Document encrypted with old method. Please re-upload.');
+        return;
+      }
+      
+      try {
+        const encryptedKeys = metadata.ethCrypto?.encryptedKeys;
+        const fileArrayBuffer = await fileBlob.arrayBuffer();
+        const encryptedFile = new TextDecoder().decode(new Uint8Array(fileArrayBuffer));
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const decryptedData = await ethCryptoService.instance.decryptFile(
+          encryptedFile,
+          encryptedKeys,
+          account,
+          signer
+        );
+        const decryptedBlob = new Blob([decryptedData], { type: 'application/octet-stream' });
+        fileUrl = URL.createObjectURL(decryptedBlob);
+        setDecryptedFileUrl(fileUrl);
+      } catch (error) {
+        setError('Failed to decrypt document. You may not have access or need to connect your wallet.');
+        dispatch({
+          type: 'error',
+          message: 'Failed to decrypt document. You may not have access or need to connect your wallet.',
+          title: 'Decryption Error',
+          position: 'topR',
+        });
+      }
+    }
+    if (metadata && doc && account) {
+      fetchAndDecrypt();
+    }
+  }, [metadata, doc, account, docId, dispatch]);
 
   const handleSign = async () => {
     setSigning(true);
@@ -181,10 +234,6 @@ function DocumentDetail() {
     setSuccess('');
     try {
       if (!window.ethereum) throw new Error('No wallet found');
-      
-      if (!decryptedFileUrl && metadata?.file?.encrypted) {
-        throw new Error('Please decrypt and view the document before signing.');
-      }
       
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
@@ -307,51 +356,6 @@ function DocumentDetail() {
     }
   };
 
-  const handleDecrypt = async () => {
-    setDecrypting(true);
-    setDecryptionError('');
-    try {
-      if (!metadata?.encryptedKeys?.[account]) {
-        throw new Error('No encrypted key found for your account');
-      }
-      const encryptedKey = metadata.encryptedKeys[account];
-      const decryptedKey = await window.ethereum.request({
-        method: 'eth_decrypt',
-        params: [encryptedKey, account]
-      });
-      
-      let encryptedContent;
-      const fileRes = await fetch(`https://brown-sparkling-sheep-903.mypinata.cloud/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`);
-      if (!fileRes.ok) {
-        const altFileRes = await fetch(`https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`);
-        if (!altFileRes.ok) {
-          throw new Error('Failed to fetch encrypted file from IPFS');
-        }
-        encryptedContent = await altFileRes.text();
-      } else {
-        encryptedContent = await fileRes.text();
-      }
-      
-      const decrypted = CryptoJS.AES.decrypt(encryptedContent, decryptedKey);
-      const decryptedArray = decrypted.toString(CryptoJS.enc.Utf8);
-      
-      const blob = new Blob([decryptedArray], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      setDecryptedFileUrl(url);
-    } catch (err) {
-      const errorMessage = err.message || 'Failed to decrypt.';
-      setDecryptionError(errorMessage);
-      dispatch({
-        type: 'error',
-        message: errorMessage,
-        title: 'Decryption Error',
-        position: 'topR',
-      });
-    } finally {
-      setDecrypting(false);
-    }
-  };
-
   const copyVerificationDetails = async (signerAddress, signature) => {
     try {
       const message = createVerificationMessage(documentHash, signerAddress, signature);
@@ -415,27 +419,19 @@ function DocumentDetail() {
             </div>
           </div>
 
-          {metadata?.file?.encrypted && !decryptedFileUrl && (
+          {metadata?.file && (
             <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200 flex items-center">
               <div className="flex-1">
-                <h3 className="text-base font-semibold mb-1 text-blue-900">Encrypted Document</h3>
-                <p className="text-sm mb-2">This document is encrypted. You need to decrypt it before signing.</p>
-                {decryptionError && <p className="text-red-600 mt-1 text-xs">{decryptionError}</p>}
+                <h3 className="text-base font-semibold mb-1 text-blue-900">Document File</h3>
+                <p className="text-sm mb-2">This document is stored on IPFS.</p>
               </div>
-              <button
-                onClick={handleDecrypt}
-                disabled={decrypting}
-                className="ml-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
-              >
-                {decrypting ? 'Decrypting...' : 'Decrypt Document'}
-              </button>
             </div>
           )}
 
           {decryptedFileUrl && (
             <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200 flex items-center">
               <div className="flex-1">
-                <h3 className="text-base font-semibold mb-1 text-green-900">Decrypted Document</h3>
+                <h3 className="text-base font-semibold mb-1 text-green-900">Document</h3>
                 <a
                   href={decryptedFileUrl}
                   download={metadata?.file?.name || 'document'}
@@ -453,7 +449,7 @@ function DocumentDetail() {
             {!hasSigned && isCurrentSigner && !doc.isRevoked && (
               <button
                 onClick={handleSign}
-                disabled={signing || (metadata?.file?.encrypted && !decryptedFileUrl)}
+                disabled={signing}
                 className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
               >
                 {signing ? 'Signing...' : 'Sign Document'}

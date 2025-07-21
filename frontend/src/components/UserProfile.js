@@ -15,8 +15,8 @@ function UserProfile() {
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
-        const [firstName, familyName, email, dob, isRegistered, publicKey] = await contract.getUserProfile(account);
-        setProfile({ firstName, familyName, email, dob, isRegistered, publicKey });
+        const [firstName, familyName, email, dob, , publicKey] = await contract.getUserProfile(account);
+        setProfile({ firstName, familyName, email, dob, publicKey });
       } catch (err) {
       } finally {
         setLoading(false);
@@ -36,10 +36,13 @@ function UserProfile() {
           <div><strong>Family Name:</strong> {profile.familyName}</div>
           <div><strong>Email:</strong> {profile.email}</div>
           <div><strong>Date of Birth:</strong> {profile.dob && new Date(Number(profile.dob) * 1000).toLocaleDateString()}</div>
-          <div><strong>Registered:</strong> {profile.isRegistered ? 'Yes' : 'No'}</div>
-          {profile.publicKey && (
-            <div><strong>Public Key:</strong> <span className="break-all text-xs">{profile.publicKey}</span></div>
-          )}
+          <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="text-lg font-semibold mb-2 text-blue-900">🔐 Decentralized Encryption</h3>
+            <p className="text-sm text-blue-700">
+              Your documents are now encrypted using decentralized, Ethereum-based encryption. 
+              Only you and authorized signers can decrypt files using your Ethereum wallet.
+            </p>
+          </div>
         </div>
       ) : (
         <div className="text-gray-500">No profile found.</div>

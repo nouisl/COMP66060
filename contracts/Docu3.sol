@@ -34,6 +34,7 @@ contract DocumentSign {
 
     mapping(address => UserProfile) public profiles;
     address[] public registeredUsers;
+    mapping(string => address) public emailToAddress;
 
     event DocumentCreated(
         uint256 indexed docId,
@@ -256,8 +257,10 @@ contract DocumentSign {
         string memory publicKey
     ) public {
         require(!profiles[msg.sender].isRegistered, "Already registered");
+        require(emailToAddress[email] == address(0), "Email already registered");
         profiles[msg.sender] = UserProfile(firstName, familyName, email, dob, true, publicKey);
         registeredUsers.push(msg.sender);
+        emailToAddress[email] = msg.sender;
         emit UserRegistered(msg.sender, firstName, familyName, email, dob, publicKey);
     }
 
@@ -276,5 +279,18 @@ contract DocumentSign {
 
     function getAllRegisteredUsers() public view returns (address[] memory) {
         return registeredUsers;
+    }
+
+    function isSigner(address _user, uint256 _docId) external view returns (bool) {
+        Document storage doc = documents[_docId];
+        if (!doc.exists) return false;
+        if (doc.creator == _user) return true;
+        
+        for (uint i = 0; i < doc.signers.length; i++) {
+            if (doc.signers[i] == _user) {
+                return true;
+            }
+        }
+        return false;
     }
 } 
