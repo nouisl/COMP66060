@@ -37,10 +37,10 @@ function UserProfile() {
           <div><strong>Email:</strong> {profile.email}</div>
           <div><strong>Date of Birth:</strong> {profile.dob && new Date(Number(profile.dob) * 1000).toLocaleDateString()}</div>
           <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h3 className="text-lg font-semibold mb-2 text-blue-900">🔐 Lit Protocol Encryption</h3>
+            <h3 className="text-lg font-semibold mb-2 text-blue-900">🔐 Decentralized Encryption</h3>
             <p className="text-sm text-blue-700">
-              Your documents are now encrypted using Lit Protocol with wallet-based access control. 
-              No key management needed - just connect your wallet to decrypt documents from any device.
+              Your documents are now encrypted using decentralized, Ethereum-based encryption. 
+              Only you and authorized signers can decrypt files using your Ethereum wallet.
             </p>
           </div>
         </div>
