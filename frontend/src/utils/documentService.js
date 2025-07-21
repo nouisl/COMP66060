@@ -57,9 +57,8 @@ class DocumentService {
                 const response = await fetch(url);
                 if (response.ok) {
                   const metadata = await response.json();
-                  if (metadata.litProtocol && 
-                      metadata.litProtocol.encryptedSymmetricKey && 
-                      metadata.litProtocol.accessControlConditions &&
+                  if (metadata.ethCrypto && 
+                      metadata.ethCrypto.encryptedKeys && 
                       metadata.file && 
                       metadata.file.encrypted === true) {
                     hasValidMetadata = true;
