@@ -2,9 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useMoralis } from 'react-moralis';
 import Docu3 from '../contracts/Docu3.json';
-import { encryptFileWithLit } from '../utils/litService';
-import { LitNodeClient } from '@lit-protocol/lit-node-client';
-import { LIT_NETWORK } from '@lit-protocol/constants';
 import { downloadEncryptedKey, restoreEncryptedKey, getEncryptedPrivateKey } from '../utils/crypto';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
@@ -12,8 +9,6 @@ function UserProfile() {
   const { account } = useMoralis();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [litStatus, setLitStatus] = useState('');
-  const [testingLit, setTestingLit] = useState(false);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keyTab, setKeyTab] = useState('download');
   const [restoreStatus, setRestoreStatus] = useState('');
@@ -57,20 +52,6 @@ function UserProfile() {
     }
     fetchBalance();
   }, [account]);
-
-  async function testLitConnection() {
-    setTestingLit(true);
-    setLitStatus('');
-    try {
-      const client = new LitNodeClient({ litNetwork: LIT_NETWORK.DatilDev });
-      await client.connect();
-      setLitStatus('✅ Lit Protocol connection successful!');
-    } catch (err) {
-      setLitStatus('❌ Lit Protocol connection failed: ' + (err?.message || err));
-    } finally {
-      setTestingLit(false);
-    }
-  }
 
   if (loading) return <div className="text-center py-8">Loading profile...</div>;
 
