@@ -4,6 +4,8 @@ import { ethers } from 'ethers';
 import { uploadFolderToPinata } from '../utils/pinata';
 import { useNotification } from '@web3uikit/core';
 import { fetchGasPrices, getGasConfig } from '../utils/gasStation';
+import { encryptDocument } from '../utils/crypto';
+import { useNavigate } from 'react-router-dom';
 
 function DocumentUpload() {
   const [error, setError] = useState('');
@@ -18,6 +20,7 @@ function DocumentUpload() {
   const fileInputRef = useRef();
   const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
   const dispatch = useNotification();
+  const navigate = useNavigate();
 
   useEffect(() => {
     async function fetchRegisteredUsers() {
@@ -48,7 +51,6 @@ function DocumentUpload() {
     setSuccess('');
     setUploading(true);
     let provider, signer, uploaderAddress, contract;
-    let docId; // Define docId at the top
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
@@ -57,18 +59,15 @@ function DocumentUpload() {
       signer = await provider.getSigner();
       uploaderAddress = await signer.getAddress();
       contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
-      
       const network = await provider.getNetwork();
       const expectedChainId = 80002;
       if (network.chainId.toString() !== expectedChainId.toString()) {
         throw new Error(`Please switch to Polygon Amoy testnet (Chain ID: ${expectedChainId}). Current network: ${network.name} (Chain ID: ${network.chainId})`);
       }
-      
       const balance = await provider.getBalance(uploaderAddress);
       if (balance === 0n) {
         throw new Error('Your wallet has no MATIC. Please add funds to your wallet.');
       }
-      
       for (let i = 0; i < signers.length; i++) {
         if (!signers[i].address) {
           throw new Error(`Signer ${i + 1}: ${signers[i].email} is not a registered user.`);
@@ -79,30 +78,32 @@ function DocumentUpload() {
         throw new Error('File must have a valid extension');
       }
       const filePath = 'document.' + fileExt;
-      
       const validSignerAddresses = signers.map(s => s.address).filter(addr => addr);
-      
-
-      // Remove any connect call
-      // Only use encryptFile
-      // Remove all encryption logic, upload file as-is
+      const allRecipients = [uploaderAddress, ...validSignerAddresses];
+      const getPublicKey = async (address) => {
+        const profile = await contract.getUserProfile(address);
+        return profile[5];
+      };
+      const fileBuffer = await selectedFile.arrayBuffer();
+      const { encryptedFile, encryptedKeys } = await encryptDocument(fileBuffer, uploaderAddress, validSignerAddresses, getPublicKey);
       const metadata = {
         title,
         description,
         file: {
           name: selectedFile.name,
           path: filePath,
-          encrypted: false,
+          encrypted: true,
+        },
+        asym: {
+          encryptedKeys
         }
       };
-      const fileBlob = selectedFile;
+      const encryptedBlob = new Blob([encryptedFile], { type: 'text/plain' });
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
       const files = [
-        { path: filePath, content: fileBlob },
+        { path: filePath, content: encryptedBlob },
         { path: 'metadata.json', content: metadataBlob },
       ];
-      
-      // Upload encrypted file to IPFS
       let finalDirHash;
       try {
         finalDirHash = await uploadFolderToPinata(files);
@@ -110,24 +111,8 @@ function DocumentUpload() {
           throw new Error('No hash returned from IPFS upload');
         }
       } catch (uploadError) {
-
-        try {
-          const revokeTx = await contract.revokeDocument(docId, "IPFS upload failed");
-          await revokeTx.wait();
-        } catch (revokeError) {
-
-          throw new Error(`Failed to upload encrypted file to IPFS and document could not be revoked. Document ID: ${docId}. Please contact support.`);
-        }
-        
-        throw new Error(`Failed to upload encrypted file to IPFS: ${uploadError.message}. Document has been revoked.`);
+        throw new Error(`Failed to upload encrypted file to IPFS: ${uploadError.message}`);
       }
-      
-      try {
-        await contract.documentCount();
-      } catch (err) {
-        throw new Error(`Contract not accessible at address ${CONTRACT_ADDRESS}. Please verify the contract is deployed on the current network.`);
-      }
-      
       const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
       const validSigners = signers
         .map(s => s.address)
@@ -151,51 +136,70 @@ function DocumentUpload() {
           throw new Error(`Signer ${validSigners[i]} is not a registered user or profile fetch failed.`);
         }
       }
-      
-      let amendGasEstimate;
-      let amendGasConfig;
-      let amendRetryCount = 0;
-      const amendMaxRetries = 3;
-      
-      while (amendRetryCount < amendMaxRetries) {
+      let createGasEstimate;
+      let createGasConfig;
+      let createRetryCount = 0;
+      const createMaxRetries = 3;
+      while (createRetryCount < createMaxRetries) {
         try {
-          amendGasEstimate = await contract.amendDocument.estimateGas(docId, finalDirHash, expiryTimestamp);
+          createGasEstimate = await contract.createDocument.estimateGas(finalDirHash, validSigners, expiryTimestamp);
           try {
             const gasPrices = await fetchGasPrices();
-            amendGasConfig = getGasConfig(gasPrices, 'standard');
+            createGasConfig = getGasConfig(gasPrices, 'standard');
           } catch (gasError) {
-            amendGasConfig = {
+            createGasConfig = {
               maxFeePerGas: ethers.parseUnits('50', 'gwei'),
               maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
             };
           }
           break;
         } catch (err) {
-          amendRetryCount++;
-          if (amendRetryCount >= amendMaxRetries) {
-            amendGasEstimate = 300000n;
-            amendGasConfig = {
+          createRetryCount++;
+          if (createRetryCount >= createMaxRetries) {
+            createGasEstimate = 300000n;
+            createGasConfig = {
               maxFeePerGas: ethers.parseUnits('50', 'gwei'),
               maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
             };
             break;
           }
-          await new Promise(resolve => setTimeout(resolve, 1000 * amendRetryCount));
+          await new Promise(resolve => setTimeout(resolve, 1000 * createRetryCount));
         }
       }
-      
-      const amendTx = await contract.amendDocument(docId, finalDirHash, expiryTimestamp, {
-        gasLimit: amendGasEstimate * 150n / 100n,
-        ...amendGasConfig
+      const createTx = await contract.createDocument(finalDirHash, validSigners, expiryTimestamp, {
+        gasLimit: createGasEstimate * 150n / 100n,
+        ...createGasConfig
       });
-      await amendTx.wait();
-      
+      const receipt = await createTx.wait();
+      // Find the new document ID from the event or fallback to documentCount
+      let newDocId = null;
+      if (receipt && receipt.logs && receipt.logs.length > 0) {
+        // Try to parse the DocumentCreated event
+        for (const log of receipt.logs) {
+          try {
+            const parsed = contract.interface.parseLog(log);
+            if (parsed && parsed.name === 'DocumentCreated') {
+              newDocId = parsed.args.docId?.toString();
+              break;
+            }
+          } catch {}
+        }
+      }
+      if (!newDocId) {
+        // fallback: fetch documentCount
+        try {
+          newDocId = (await contract.documentCount()).toString();
+        } catch {}
+      }
       dispatch({
         type: 'success',
         message: 'Document uploaded and registered on-chain!',
         title: 'Success',
         position: 'topR',
       });
+      if (newDocId) {
+        navigate(`/documents/${newDocId}`);
+      }
     } catch (err) {
       if (err.code === 4001 || (err.message && err.message.toLowerCase().includes('user denied'))) {
         dispatch({

@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { Web3Context } from '../context/Web3Context';
 import { fetchGasPrices, getGasConfig } from '../utils/gasStation';
+import { generateAndStoreEncryptedKey } from '../utils/crypto';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
@@ -20,13 +21,20 @@ function UserRegistration() {
   const [error, setError] = useState('');
   const [balance, setBalance] = useState(null);
   const [networkStatus, setNetworkStatus] = useState('checking');
+  const [passphrase, setPassphrase] = useState('');
+  const [confirmPassphrase, setConfirmPassphrase] = useState('');
+  const [walletConnected, setWalletConnected] = useState(!!window.ethereum);
   const dispatch = useNotification();
   const navigate = useNavigate();
   const { setIsRegistered } = useContext(Web3Context);
 
   useEffect(() => {
     async function checkBalance() {
-      if (!window.ethereum) return;
+      if (!window.ethereum) {
+        setWalletConnected(false);
+        return;
+      }
+      setWalletConnected(true);
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
@@ -52,6 +60,8 @@ function UserRegistration() {
     try {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!dob || isNaN(Date.parse(dob))) throw new Error('Please enter a valid date of birth.');
+      if (!passphrase || passphrase.length < 8) throw new Error('Passphrase must be at least 8 characters.');
+      if (passphrase !== confirmPassphrase) throw new Error('Passphrases do not match.');
       const dobDate = new Date(dob);
       const now = new Date();
       if (dobDate > now) throw new Error('Date of birth cannot be in the future.');
@@ -71,22 +81,17 @@ function UserRegistration() {
       }
       
       const dobTimestamp = Math.floor(new Date(dob).getTime() / 1000);
+      const userAddress = await signer.getAddress();
+      const { publicKey } = await generateAndStoreEncryptedKey(passphrase, userAddress);
       let tx;
       let retryCount = 0;
       const maxRetries = 3;
-      const userAddress = await signer.getAddress();
-      const message = 'Registering for Docu3';
-      const signature = await window.ethereum.request({
-        method: 'personal_sign',
-        params: [message, userAddress]
-      });
-      
       const attemptTransaction = async () => {
-        const gasEstimate = await contractWithSigner.registerUser.estimateGas(firstName, familyName, normalizedEmail, dobTimestamp);
+        const gasEstimate = await contractWithSigner.registerUser.estimateGas(firstName, familyName, normalizedEmail, dobTimestamp, publicKey);
         try {
           const gasPrices = await fetchGasPrices();
           const gasConfig = getGasConfig(gasPrices, 'standard');
-          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, {
+          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, publicKey, {
             gasLimit: gasEstimate * 150n / 100n,
             ...gasConfig
           });
@@ -95,7 +100,7 @@ function UserRegistration() {
             maxFeePerGas: ethers.parseUnits('50', 'gwei'),
             maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
           };
-          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, {
+          return await contractWithSigner.registerUser(firstName, familyName, normalizedEmail, dobTimestamp, publicKey, {
             gasLimit: gasEstimate * 150n / 100n,
             ...fallbackGasConfig
           });
@@ -206,11 +211,9 @@ function UserRegistration() {
     <div className="flex justify-center px-4 mt-8">
       <div className="w-full max-w-2xl bg-white rounded-lg shadow-md p-8 mx-auto">
         <h1 className="text-2xl font-bold mb-6 text-gray-900">Register</h1>
-        {balance !== null && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800">
-              Wallet Balance: <span className="font-semibold">{parseFloat(balance).toFixed(4)} MATIC</span>
-            </p>
+        {!walletConnected && (
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-900 font-semibold">
+            Please connect your wallet to register.
           </div>
         )}
         {networkStatus === 'error' && (
@@ -235,6 +238,9 @@ function UserRegistration() {
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="bg-yellow-100 border border-yellow-300 text-yellow-900 px-4 py-3 rounded mb-4 text-sm font-semibold">
+            If you forget your passphrase, you will lose access to your encrypted documents. There is no way to recover your passphrase. Please keep it safe.
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
             <input
@@ -285,12 +291,36 @@ function UserRegistration() {
               disabled={loading || pending}
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Passphrase *</label>
+            <input
+              type="password"
+              value={passphrase}
+              onChange={e => setPassphrase(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Enter a passphrase (min 8 chars)"
+              required
+              disabled={loading || pending}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Passphrase *</label>
+            <input
+              type="password"
+              value={confirmPassphrase}
+              onChange={e => setConfirmPassphrase(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Re-enter your passphrase"
+              required
+              disabled={loading || pending}
+            />
+          </div>
           {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded mb-2">{error}</div>}
           {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded mb-2">{success}</div>}
           <button
             type="submit"
             className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-            disabled={loading || pending}
+            disabled={loading || pending || !walletConnected}
           >
             {loading || pending ? 'Registering...' : 'Register'}
           </button>
