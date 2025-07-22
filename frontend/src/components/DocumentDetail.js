@@ -330,12 +330,12 @@ function DocumentDetail() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-2">
+    <div className="min-h-screen flex justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-2">
       {loading && <div className="text-center py-8">Loading document...</div>}
       {!loading && error && <div className="text-center text-red-600 py-8">{error}</div>}
       {!loading && !error && !doc && <div className="text-center py-8">Document not found</div>}
       {!loading && !error && doc && (
-        <div className="w-full max-w-4xl bg-white rounded-xl shadow-lg p-8 mx-auto">
+        <div className="w-full max-w-4xl bg-white rounded-xl shadow-lg p-8 mx-auto mt-10">
           <h2 className="text-3xl font-bold mb-8 text-gray-900 text-center">Document Details</h2>
           <div className="grid md:grid-cols-2 gap-8 mb-8">
             <div>

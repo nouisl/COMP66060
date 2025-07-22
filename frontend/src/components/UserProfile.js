@@ -56,7 +56,7 @@ function UserProfile() {
   if (loading) return <div className="text-center py-8">Loading profile...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8 mt-8">
+    <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8 mt-4">
       <h2 className="text-2xl font-bold mb-6 text-gray-900">User Profile</h2>
       {profile ? (
         <div className="space-y-4">
