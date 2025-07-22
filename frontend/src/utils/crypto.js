@@ -1,15 +1,72 @@
 import { ethers } from 'ethers';
-import CryptoJS from 'crypto-js';
 import EthCrypto from 'eth-crypto';
 
 export async function generateDocumentHash(document, ipfsHash) {
   if (document instanceof File) {
     const arrayBuffer = await document.arrayBuffer();
-    const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
-    return CryptoJS.SHA256(wordArray).toString();
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', arrayBuffer);
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
   } else {
     return ethers.keccak256(ethers.toUtf8Bytes(ipfsHash));
   }
+}
+
+export async function encryptDocument(fileBuffer, uploader, signerAddresses, getPublicKey) {
+  const allRecipients = [uploader, ...signerAddresses];
+  const key = await window.crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  );
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const encryptedBuffer = await window.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    fileBuffer
+  );
+  const rawKey = new Uint8Array(await window.crypto.subtle.exportKey('raw', key));
+  const encryptedKeys = {};
+  let debug = { encryptedKeys: {}, errors: [] };
+  for (const addr of allRecipients) {
+    try {
+      const publicKey = await getPublicKey(addr);
+      const encryptedKey = await EthCrypto.encryptWithPublicKey(publicKey, Array.from(rawKey).map(b => b.toString(16).padStart(2, '0')).join(''));
+      encryptedKeys[addr] = EthCrypto.cipher.stringify(encryptedKey);
+      debug.encryptedKeys[addr] = { encryptedKeyObj: encryptedKey, encryptedKeyString: encryptedKeys[addr] };
+    } catch (e) {
+      debug.errors.push(`EncryptWithPublicKey error for ${addr}: ${e.message || e}`);
+      encryptedKeys[addr] = undefined;
+      debug.encryptedKeys[addr] = { error: e.message || e };
+    }
+  }
+  return {
+    encryptedFile: encryptedBuffer, 
+    encryptedKeys,
+    iv: Array.from(iv), 
+    debug
+  };
+}
+
+export async function decryptDocument(encryptedFile, encryptedKeys, userAddress, passphrase, iv) {
+  const encryptedSymmetricKey = encryptedKeys[userAddress];
+  const cipher = EthCrypto.cipher.parse(encryptedSymmetricKey);
+  const privateKey = await getDecryptedPrivateKey(userAddress, passphrase);
+  const cleanPrivateKey = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey;
+  const symmetricKeyHex = await EthCrypto.decryptWithPrivateKey(cleanPrivateKey, cipher);
+  const symmetricKey = new Uint8Array(symmetricKeyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+  const key = await window.crypto.subtle.importKey(
+    'raw',
+    symmetricKey,
+    { name: 'AES-GCM' },
+    true,
+    ['decrypt']
+  );
+  const decryptedBuffer = await window.crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: new Uint8Array(iv) },
+    key,
+    encryptedFile
+  );
+  return decryptedBuffer; 
 }
 
 export async function signDocumentHash(documentHash, signer) {
@@ -17,7 +74,6 @@ export async function signDocumentHash(documentHash, signer) {
     const hashBytes = ethers.isHexString(documentHash) 
       ? documentHash 
       : ethers.keccak256(ethers.toUtf8Bytes(documentHash));
-    
     const signature = await signer.signMessage(ethers.getBytes(hashBytes));
     return signature;
   } catch (error) {
@@ -30,9 +86,7 @@ export function verifySignature(documentHash, signature, expectedSigner) {
     const hashBytes = ethers.isHexString(documentHash) 
       ? documentHash 
       : ethers.keccak256(ethers.toUtf8Bytes(documentHash));
-    
     const recoveredAddress = ethers.verifyMessage(ethers.getBytes(hashBytes), signature);
-    
     return recoveredAddress.toLowerCase() === expectedSigner.toLowerCase();
   } catch (error) {
     return false;
@@ -55,6 +109,7 @@ export function generateDocumentId(ipfsHash, title, creator) {
 
 export async function generateAndStoreEncryptedKey(passphrase, userAddress) {
   const identity = EthCrypto.createIdentity();
+  const CryptoJS = require('crypto-js');
   const encryptedPrivateKey = CryptoJS.AES.encrypt(identity.privateKey, passphrase).toString();
   localStorage.setItem(`docu3_privateKey_${userAddress}`, encryptedPrivateKey);
   return { publicKey: identity.publicKey, encryptedPrivateKey };
@@ -67,47 +122,11 @@ export function getEncryptedPrivateKey(userAddress) {
 export async function getDecryptedPrivateKey(userAddress, passphrase) {
   const encryptedPrivateKey = getEncryptedPrivateKey(userAddress);
   if (!encryptedPrivateKey) throw new Error('No encrypted key found. Please register or restore your key.');
+  const CryptoJS = require('crypto-js');
   const bytes = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase);
   const decryptedPrivateKey = bytes.toString(CryptoJS.enc.Utf8);
   if (!decryptedPrivateKey) throw new Error('Decryption failed. Wrong passphrase?');
   return decryptedPrivateKey;
-}
-
-export async function encryptDocument(fileBuffer, uploader, signerAddresses, getPublicKey) {
-  const allRecipients = [uploader, ...signerAddresses];
-  // Generate a random 32-byte base64 string for the symmetric key
-  const array = new Uint8Array(32);
-  window.crypto.getRandomValues(array);
-  const symmetricKey = btoa(String.fromCharCode(...array));
-  const encryptedFile = CryptoJS.AES.encrypt(CryptoJS.lib.WordArray.create(fileBuffer), symmetricKey).toString();
-  const encryptedKeys = {};
-  for (const addr of allRecipients) {
-    const publicKey = await getPublicKey(addr);
-    const encryptedKey = await EthCrypto.encryptWithPublicKey(publicKey, symmetricKey);
-    encryptedKeys[addr] = EthCrypto.cipher.stringify(encryptedKey);
-  }
-  return { encryptedFile, encryptedKeys };
-}
-
-export async function decryptDocument(encryptedFile, encryptedKeys, userAddress, passphrase) {
-  const encryptedSymmetricKey = encryptedKeys[userAddress];
-  const cipher = EthCrypto.cipher.parse(encryptedSymmetricKey);
-  const privateKey = await getDecryptedPrivateKey(userAddress, passphrase);
-  // EthCrypto expects private key without 0x prefix
-  const cleanPrivateKey = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey;
-  const symmetricKey = await EthCrypto.decryptWithPrivateKey(cleanPrivateKey, cipher);
-  const decrypted = CryptoJS.AES.decrypt(encryptedFile, symmetricKey);
-  const decryptedBytes = decrypted.sigBytes > 0 ? decrypted : null;
-  if (!decryptedBytes) throw new Error('Failed to decrypt document');
-  const uint8Array = new Uint8Array(decryptedBytes.words.length * 4);
-  for (let i = 0; i < decryptedBytes.words.length; i++) {
-    const word = decryptedBytes.words[i];
-    uint8Array[i * 4] = (word >> 24) & 0xff;
-    uint8Array[i * 4 + 1] = (word >> 16) & 0xff;
-    uint8Array[i * 4 + 2] = (word >> 8) & 0xff;
-    uint8Array[i * 4 + 3] = word & 0xff;
-  }
-  return uint8Array.slice(0, decryptedBytes.sigBytes);
 }
 
 export function downloadEncryptedKey(userAddress) {

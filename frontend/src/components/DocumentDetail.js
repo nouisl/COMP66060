@@ -10,8 +10,10 @@ import {
   formatSignature,
   createVerificationMessage,
   getDecryptedPrivateKey,
-  getEncryptedPrivateKey
+  getEncryptedPrivateKey,
+  decryptDocument
 } from '../utils/crypto';
+import EthCrypto from 'eth-crypto';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
@@ -313,37 +315,65 @@ function DocumentDetail() {
       );
       const encryptedKey = foundEntry ? foundEntry[1] : undefined;
       if (!encryptedKey) throw new Error('No encrypted symmetric key for your account in this document.');
-      let symmetricKey = '';
+      let symmetricKeyHex = '';
       try {
-        const cipher = window.EthCrypto.cipher.parse(encryptedKey);
-        // EthCrypto expects private key without 0x prefix
+        const cipher = EthCrypto.cipher.parse(encryptedKey);
         const cleanPrivateKey = decryptedPrivateKey.startsWith('0x') ? decryptedPrivateKey.slice(2) : decryptedPrivateKey;
-        symmetricKey = await window.EthCrypto.decryptWithPrivateKey(cleanPrivateKey, cipher);
+        symmetricKeyHex = await EthCrypto.decryptWithPrivateKey(cleanPrivateKey, cipher);
         setDebugSymmetricKeySuccess('true');
       } catch (e) {
         setDebugSymmetricKeySuccess('FAILED: ' + (e.message || 'error'));
         throw new Error('Symmetric key decryption failed. Your private key does not match the one used to encrypt this document.');
       }
       let documentDecryptionSuccess = false;
+      let fileMimeType = 'application/octet-stream';
       try {
-        let encryptedContent;
-        const fileRes = await fetch(`https://brown-sparkling-sheep-903.mypinata.cloud/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`);
-        if (!fileRes.ok) {
-          const altFileRes = await fetch(`https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`);
+        let encryptedContentBuffer;
+        const fileUrl = `https://brown-sparkling-sheep-903.mypinata.cloud/ipfs/${doc.ipfsHash}/${metadata.file.path}`;
+        const fileRes = await fetch(fileUrl);
+        if (fileRes.ok) {
+          encryptedContentBuffer = await fileRes.arrayBuffer();
+          fileMimeType = fileRes.headers.get('content-type') || fileMimeType;
+        } else {
+          const altFileUrl = `https://ipfs.io/ipfs/${doc.ipfsHash}/${metadata.file.path}`;
+          const altFileRes = await fetch(altFileUrl);
           if (!altFileRes.ok) {
             throw new Error('Failed to fetch encrypted file from IPFS');
           }
-          encryptedContent = await altFileRes.text();
-        } else {
-          encryptedContent = await fileRes.text();
+          encryptedContentBuffer = await altFileRes.arrayBuffer();
+          fileMimeType = altFileRes.headers.get('content-type') || fileMimeType;
         }
-        const CryptoJS = require('crypto-js');
-        const decrypted = CryptoJS.AES.decrypt(encryptedContent, symmetricKey);
-        const decryptedArray = decrypted.toString(CryptoJS.enc.Utf8);
-        documentDecryptionSuccess = !!decryptedArray;
+        let iv = undefined;
+        if (metadata && metadata.iv) {
+          iv = metadata.iv;
+        } else if (metadata && metadata.asym && metadata.asym.iv) {
+          iv = metadata.asym.iv;
+        }
+        if (!iv) {
+          throw new Error('IV (initialization vector) missing from metadata. Cannot decrypt.');
+        }
+        const decryptedBuffer = await decryptDocument(
+          encryptedContentBuffer,
+          metadata.asym.encryptedKeys,
+          account,
+          passphrase,
+          iv
+        );
+        documentDecryptionSuccess = !!decryptedBuffer;
         setDebugDocumentDecryptionSuccess(documentDecryptionSuccess ? 'true' : 'false');
         if (!documentDecryptionSuccess) throw new Error('Failed to decrypt document');
-        const blob = new Blob([decryptedArray], { type: 'application/octet-stream' });
+        let ext = '';
+        if (metadata.file && metadata.file.name) {
+          const parts = metadata.file.name.split('.');
+          ext = parts.length > 1 ? parts.pop().toLowerCase() : '';
+        }
+        if (!fileMimeType || fileMimeType === 'application/octet-stream') {
+          if (ext === 'pdf') fileMimeType = 'application/pdf';
+          else if (['jpg', 'jpeg'].includes(ext)) fileMimeType = 'image/jpeg';
+          else if (ext === 'png') fileMimeType = 'image/png';
+          else if (ext === 'txt') fileMimeType = 'text/plain';
+        }
+        const blob = new Blob([decryptedBuffer], { type: fileMimeType });
         const url = URL.createObjectURL(blob);
         setDecryptedFileUrl(url);
         setShowPassModal(false);
@@ -444,13 +474,25 @@ function DocumentDetail() {
           )}
 
           {decryptedFileUrl && (
-            <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200 flex items-center">
-              <div className="flex-1">
+            <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200 flex flex-col items-center">
+              <div className="flex-1 w-full text-center">
                 <h3 className="text-base font-semibold mb-1 text-green-900">Decrypted Document</h3>
+                {(() => {
+                  const ext = metadata?.file?.name?.split('.').pop()?.toLowerCase();
+                  if (['jpg', 'jpeg', 'png'].includes(ext)) {
+                    return <img src={decryptedFileUrl} alt="Decrypted Document" className="mx-auto max-h-96 my-4 rounded shadow" style={{maxWidth: '100%'}} />;
+                  } else if (ext === 'pdf') {
+                    return <iframe src={decryptedFileUrl} title="Decrypted PDF" className="mx-auto my-4 rounded shadow" style={{width: '100%', height: '600px', border: 'none'}} />;
+                  } else if (ext === 'txt') {
+                    return <iframe src={decryptedFileUrl} title="Decrypted Text" className="mx-auto my-4 rounded shadow" style={{width: '100%', height: '400px', border: 'none'}} />;
+                  } else {
+                    return <div className="text-gray-600 my-4">Preview not available for this file type.</div>;
+                  }
+                })()}
                 <a
                   href={decryptedFileUrl}
                   download={metadata?.file?.name || 'document'}
-                  className="inline-block mt-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                  className="inline-block mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
                 >
                   Download Document
                 </a>

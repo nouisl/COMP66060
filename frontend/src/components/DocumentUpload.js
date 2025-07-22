@@ -23,6 +23,8 @@ function DocumentUpload() {
   const navigate = useNavigate();
   const [debugEncryptedKeys, setDebugEncryptedKeys] = useState(null);
   const [debugRawEncryptedKeys, setDebugRawEncryptedKeys] = useState(null);
+  const [debugUpload, setDebugUpload] = useState({});
+  const [debugEncrypt, setDebugEncrypt] = useState(null);
 
   useEffect(() => {
     async function fetchRegisteredUsers() {
@@ -87,17 +89,22 @@ function DocumentUpload() {
         return profile[5];
       };
       const fileBuffer = await selectedFile.arrayBuffer();
-      const { encryptedFile, symmetricKey } = await encryptDocument(fileBuffer, uploaderAddress, validSignerAddresses, getPublicKey);
-      const rawEncryptedKeys = {};
-      const encryptedKeys = {};
-      for (const addr of [uploaderAddress, ...validSignerAddresses]) {
+      if (!fileBuffer || fileBuffer.byteLength === 0) throw new Error('File buffer is empty');
+      const publicKeys = {};
+      for (const addr of allRecipients) {
+        if (!addr) throw new Error('Recipient address is undefined');
         const publicKey = await getPublicKey(addr);
-        const encryptedKeyObj = await window.EthCrypto.encryptWithPublicKey(publicKey, symmetricKey);
-        rawEncryptedKeys[addr] = encryptedKeyObj;
-        encryptedKeys[addr] = window.EthCrypto.cipher.stringify(encryptedKeyObj);
+        if (!publicKey) throw new Error(`No public key found for address: ${addr}`);
+        publicKeys[addr] = publicKey;
       }
-      setDebugRawEncryptedKeys(rawEncryptedKeys);
-      setDebugEncryptedKeys(encryptedKeys);
+      setDebugUpload({
+        fileBufferType: fileBuffer.constructor.name,
+        fileBufferLength: fileBuffer.byteLength,
+        allRecipients,
+        publicKeys
+      });
+      const { encryptedFile, encryptedKeys, iv, debug } = await encryptDocument(fileBuffer, uploaderAddress, validSignerAddresses, getPublicKey);
+      setDebugEncrypt(debug);
       const metadata = {
         title,
         description,
@@ -108,7 +115,8 @@ function DocumentUpload() {
         },
         asym: {
           encryptedKeys
-        }
+        },
+        iv 
       };
       const encryptedBlob = new Blob([encryptedFile], { type: 'text/plain' });
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
@@ -198,7 +206,6 @@ function DocumentUpload() {
         }
       }
       if (!newDocId) {
-        // fallback: fetch documentCount
         try {
           newDocId = (await contract.documentCount()).toString();
         } catch {}
@@ -390,6 +397,18 @@ function DocumentUpload() {
         <div className="mt-8 p-4 bg-gray-100 rounded border border-gray-300">
           <div className="font-semibold mb-2">Debug: Encrypted Keys (cipher.stringify, to be stored in metadata)</div>
           <pre className="text-xs break-all whitespace-pre-wrap">{JSON.stringify(debugEncryptedKeys, null, 2)}</pre>
+        </div>
+      )}
+      {debugUpload && Object.keys(debugUpload).length > 0 && (
+        <div className="mt-8 p-4 bg-red-100 rounded border border-red-300">
+          <div className="font-semibold mb-2">Debug: Upload Inputs</div>
+          <pre className="text-xs break-all whitespace-pre-wrap">{JSON.stringify(debugUpload, null, 2)}</pre>
+        </div>
+      )}
+      {debugEncrypt && (
+        <div className="mt-8 p-4 bg-orange-100 rounded border border-orange-300">
+          <div className="font-semibold mb-2">Debug: encryptDocument Output</div>
+          <pre className="text-xs break-all whitespace-pre-wrap">{JSON.stringify(debugEncrypt, null, 2)}</pre>
         </div>
       )}
     </div>
