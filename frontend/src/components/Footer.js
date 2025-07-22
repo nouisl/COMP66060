@@ -54,6 +54,16 @@ function Footer() {
               </li>
               <li>
                 <a
+                  href="https://amoy.polygonscan.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-base text-gray-500 hover:text-gray-900"
+                >
+                  Polygon Amoy Explorer
+                </a>
+              </li>
+              <li>
+                <a
                   href="https://ipfs.io/"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -62,16 +72,7 @@ function Footer() {
                   IPFS
                 </a>
               </li>
-              <li>
-                <a
-                  href="https://metamask.io/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-base text-gray-500 hover:text-gray-900"
-                >
-                  MetaMask
-                </a>
-              </li>
+              
             </ul>
           </div>
         </div>
