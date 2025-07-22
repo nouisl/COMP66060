@@ -21,6 +21,8 @@ function DocumentUpload() {
   const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
   const dispatch = useNotification();
   const navigate = useNavigate();
+  const [debugEncryptedKeys, setDebugEncryptedKeys] = useState(null);
+  const [debugRawEncryptedKeys, setDebugRawEncryptedKeys] = useState(null);
 
   useEffect(() => {
     async function fetchRegisteredUsers() {
@@ -85,7 +87,17 @@ function DocumentUpload() {
         return profile[5];
       };
       const fileBuffer = await selectedFile.arrayBuffer();
-      const { encryptedFile, encryptedKeys } = await encryptDocument(fileBuffer, uploaderAddress, validSignerAddresses, getPublicKey);
+      const { encryptedFile, symmetricKey } = await encryptDocument(fileBuffer, uploaderAddress, validSignerAddresses, getPublicKey);
+      const rawEncryptedKeys = {};
+      const encryptedKeys = {};
+      for (const addr of [uploaderAddress, ...validSignerAddresses]) {
+        const publicKey = await getPublicKey(addr);
+        const encryptedKeyObj = await window.EthCrypto.encryptWithPublicKey(publicKey, symmetricKey);
+        rawEncryptedKeys[addr] = encryptedKeyObj;
+        encryptedKeys[addr] = window.EthCrypto.cipher.stringify(encryptedKeyObj);
+      }
+      setDebugRawEncryptedKeys(rawEncryptedKeys);
+      setDebugEncryptedKeys(encryptedKeys);
       const metadata = {
         title,
         description,
@@ -368,6 +380,18 @@ function DocumentUpload() {
             {uploading ? 'Uploading...' : 'Upload Document'}
           </button>
       </form>
+      {debugRawEncryptedKeys && (
+        <div className="mt-8 p-4 bg-yellow-100 rounded border border-yellow-300">
+          <div className="font-semibold mb-2">Debug: Raw EncryptedKey Objects (per address)</div>
+          <pre className="text-xs break-all whitespace-pre-wrap">{JSON.stringify(debugRawEncryptedKeys, null, 2)}</pre>
+        </div>
+      )}
+      {debugEncryptedKeys && (
+        <div className="mt-8 p-4 bg-gray-100 rounded border border-gray-300">
+          <div className="font-semibold mb-2">Debug: Encrypted Keys (cipher.stringify, to be stored in metadata)</div>
+          <pre className="text-xs break-all whitespace-pre-wrap">{JSON.stringify(debugEncryptedKeys, null, 2)}</pre>
+        </div>
+      )}
     </div>
   </div>
   );

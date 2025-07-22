@@ -8,7 +8,9 @@ import {
   signDocumentHash, 
   verifySignature, 
   formatSignature,
-  createVerificationMessage
+  createVerificationMessage,
+  getDecryptedPrivateKey,
+  getEncryptedPrivateKey
 } from '../utils/crypto';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
@@ -42,6 +44,13 @@ function DocumentDetail() {
   const [signatureVerification, setSignatureVerification] = useState({});
   const [decrypting, setDecrypting] = useState(false);
   const [decryptionError, setDecryptionError] = useState('');
+  const [showPassModal, setShowPassModal] = useState(false);
+  const [passphrase, setPassphrase] = useState('');
+  const [passModalError, setPassModalError] = useState('');
+  const [noKeyModal, setNoKeyModal] = useState(false);
+  const [debugDecryptedPrivateKey, setDebugDecryptedPrivateKey] = useState('');
+  const [debugSymmetricKeySuccess, setDebugSymmetricKeySuccess] = useState('');
+  const [debugDocumentDecryptionSuccess, setDebugDocumentDecryptionSuccess] = useState('');
 
   useEffect(() => {
     async function fetchDoc() {
@@ -78,8 +87,8 @@ function DocumentDetail() {
           fullySigned,
           isRevoked
         };
-        const isSigner = signers && signers.map(addr => addr.toLowerCase()).includes(userAddress.toLowerCase());
-        const isCreator = creator && creator.toLowerCase() === userAddress.toLowerCase();
+        const isSigner = signers && signers.includes(userAddress);
+        const isCreator = creator && creator === userAddress;
         if (!isSigner && !isCreator) {
           setError('You are not authorized to view this document. Only signers and the document creator can access this page.');
           setLoading(false);
@@ -116,7 +125,7 @@ function DocumentDetail() {
           return;
         }
         const currentSigner = await contract.getCurrentSigner(docIdNum);
-        setIsCurrentSigner(currentSigner.toLowerCase() === userAddress.toLowerCase());
+        setIsCurrentSigner(currentSigner === userAddress);
         const signed = await contract.hasSigned(docIdNum, userAddress);
         setHasSigned(signed);
         const signaturesData = {};
@@ -271,46 +280,87 @@ function DocumentDetail() {
   };
 
   const handleDecrypt = async () => {
-    setDecrypting(true);
     setDecryptionError('');
+    setPassModalError('');
+    // Check for encrypted private key in localStorage
+    const encryptedPrivateKey = getEncryptedPrivateKey(account);
+    if (!encryptedPrivateKey) {
+      setNoKeyModal(true);
+      return;
+    }
+    setShowPassModal(true);
+  };
+
+  const handlePassphraseDecrypt = async () => {
+    setDecrypting(true);
+    setPassModalError('');
+    setDebugDecryptedPrivateKey('');
+    setDebugSymmetricKeySuccess('');
+    setDebugDocumentDecryptionSuccess('');
     try {
-      if (!metadata?.encryptedKeys?.[account]) {
-        throw new Error('No encrypted key found for your account');
+      let decryptedPrivateKey = '';
+      try {
+        decryptedPrivateKey = await getDecryptedPrivateKey(account, passphrase);
+        setDebugDecryptedPrivateKey(decryptedPrivateKey ? decryptedPrivateKey.slice(0, 10) + '...' : '');
+      } catch (e) {
+        setDebugDecryptedPrivateKey('FAILED: ' + (e.message || 'error'));
+        throw new Error('Private key decryption failed. Wrong passphrase or corrupted key.');
       }
-      const encryptedKey = metadata.encryptedKeys[account];
-      const decryptedKey = await window.ethereum.request({
-        method: 'eth_decrypt',
-        params: [encryptedKey, account]
-      });
-      let encryptedContent;
-      const fileRes = await fetch(`https://brown-sparkling-sheep-903.mypinata.cloud/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`);
-      if (!fileRes.ok) {
-        const altFileRes = await fetch(`https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`);
-        if (!altFileRes.ok) {
-          throw new Error('Failed to fetch encrypted file from IPFS');
+      // Case-insensitive lookup for encrypted symmetric key
+      const encryptedKeys = metadata?.asym?.encryptedKeys || {};
+      const foundEntry = Object.entries(encryptedKeys).find(
+        ([key]) => key === account
+      );
+      const encryptedKey = foundEntry ? foundEntry[1] : undefined;
+      if (!encryptedKey) throw new Error('No encrypted symmetric key for your account in this document.');
+      let symmetricKey = '';
+      try {
+        const cipher = window.EthCrypto.cipher.parse(encryptedKey);
+        // EthCrypto expects private key without 0x prefix
+        const cleanPrivateKey = decryptedPrivateKey.startsWith('0x') ? decryptedPrivateKey.slice(2) : decryptedPrivateKey;
+        symmetricKey = await window.EthCrypto.decryptWithPrivateKey(cleanPrivateKey, cipher);
+        setDebugSymmetricKeySuccess('true');
+      } catch (e) {
+        setDebugSymmetricKeySuccess('FAILED: ' + (e.message || 'error'));
+        throw new Error('Symmetric key decryption failed. Your private key does not match the one used to encrypt this document.');
+      }
+      let documentDecryptionSuccess = false;
+      try {
+        let encryptedContent;
+        const fileRes = await fetch(`https://brown-sparkling-sheep-903.mypinata.cloud/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`);
+        if (!fileRes.ok) {
+          const altFileRes = await fetch(`https://ipfs.io/ipfs/${doc.ipfsHash}/docdir/${metadata.file.path}`);
+          if (!altFileRes.ok) {
+            throw new Error('Failed to fetch encrypted file from IPFS');
+          }
+          encryptedContent = await altFileRes.text();
+        } else {
+          encryptedContent = await fileRes.text();
         }
-        encryptedContent = await altFileRes.text();
-      } else {
-        encryptedContent = await fileRes.text();
+        const CryptoJS = require('crypto-js');
+        const decrypted = CryptoJS.AES.decrypt(encryptedContent, symmetricKey);
+        const decryptedArray = decrypted.toString(CryptoJS.enc.Utf8);
+        documentDecryptionSuccess = !!decryptedArray;
+        setDebugDocumentDecryptionSuccess(documentDecryptionSuccess ? 'true' : 'false');
+        if (!documentDecryptionSuccess) throw new Error('Failed to decrypt document');
+        const blob = new Blob([decryptedArray], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        setDecryptedFileUrl(url);
+        setShowPassModal(false);
+        setPassphrase('');
+      } catch (e) {
+        setDebugDocumentDecryptionSuccess('FAILED: ' + (e.message || 'error'));
+        throw new Error('Document decryption failed. The symmetric key may be wrong or the document is corrupted.');
       }
-      const CryptoJS = require('crypto-js');
-      const decrypted = CryptoJS.AES.decrypt(encryptedContent, decryptedKey);
-      const decryptedArray = decrypted.toString(CryptoJS.enc.Utf8);
-      const blob = new Blob([decryptedArray], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      setDecryptedFileUrl(url);
     } catch (err) {
-      const errorMessage = err.message || 'Failed to decrypt.';
-      setDecryptionError(errorMessage);
-      dispatch({
-        type: 'error',
-        message: errorMessage,
-        title: 'Decryption Error',
-        position: 'topR',
-      });
+      setPassModalError(err.message || 'Failed to decrypt. Wrong passphrase or corrupted key.');
     } finally {
       setDecrypting(false);
     }
+  };
+
+  const handleCloseNoKeyModal = () => {
+    setNoKeyModal(false);
   };
 
   const copyVerificationDetails = async (signerAddress, signature) => {
@@ -420,7 +470,7 @@ function DocumentDetail() {
                 {signing ? 'Signing...' : 'Sign Document'}
               </button>
             )}
-            {doc.creator?.toLowerCase() === account?.toLowerCase() && !doc.isRevoked && (
+            {doc.creator === account && !doc.isRevoked && (
               <>
                 <button
                   onClick={() => setShowAmendForm(!showAmendForm)}
@@ -502,6 +552,76 @@ function DocumentDetail() {
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Passphrase Modal */}
+          {showPassModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full">
+                <h3 className="text-2xl font-bold mb-4 text-gray-900 text-center">Enter Passphrase</h3>
+                <p className="text-sm text-gray-700 mb-4 text-center">
+                  Please enter your passphrase to decrypt your private key and access this encrypted document.
+                </p>
+                {/* Debug info for account and metadata keys */}
+                <div className="mb-2 text-xs text-gray-500 break-all">
+                  <div><b>Account:</b> {account}</div>
+                  <div><b>Metadata Keys:</b> {Object.keys(metadata?.asym?.encryptedKeys || {}).join(', ')}</div>
+                  <div><b>Lookup Result:</b> {String(!!Object.entries(metadata?.asym?.encryptedKeys || {}).find(([key]) => key === account))}</div>
+                  <div><b>Found Key:</b> {Object.entries(metadata?.asym?.encryptedKeys || {}).find(([key]) => key === account)?.[0] || 'None'}</div>
+                  <div><b>Decrypted Private Key:</b> {debugDecryptedPrivateKey}</div>
+                  <div><b>Symmetric Key Decryption:</b> {debugSymmetricKeySuccess}</div>
+                  <div><b>Document Decryption:</b> {debugDocumentDecryptionSuccess}</div>
+                </div>
+                <input
+                  type="password"
+                  placeholder="Passphrase"
+                  value={passphrase}
+                  onChange={e => setPassphrase(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded mb-4"
+                  disabled={decrypting}
+                />
+                {passModalError && <p className="text-red-500 text-sm text-center">{passModalError}</p>}
+                <div className="flex justify-center space-x-4">
+                  <button
+                    onClick={handlePassphraseDecrypt}
+                    disabled={decrypting || !passphrase}
+                    className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+                  >
+                    {decrypting ? 'Decrypting...' : 'Decrypt & Access'}
+                  </button>
+                  <button
+                    onClick={() => { setShowPassModal(false); setPassphrase(''); setPassModalError(''); }}
+                    className="px-6 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* No Key Modal */}
+          {noKeyModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full text-center">
+                <h3 className="text-2xl font-bold mb-4 text-gray-900">No Encrypted Key Found</h3>
+                <p className="text-gray-700 mb-4">You need to restore your encrypted key before you can decrypt this document.</p>
+                <a
+                  href="/profile"
+                  className="inline-block px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 mb-4"
+                >
+                  Go to Profile to Restore Key
+                </a>
+                <div>
+                  <button
+                    onClick={handleCloseNoKeyModal}
+                    className="px-6 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           )}

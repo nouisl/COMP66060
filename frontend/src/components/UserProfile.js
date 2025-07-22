@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import { useMoralis } from 'react-moralis';
 import Docu3 from '../contracts/Docu3.json';
 import { downloadEncryptedKey, restoreEncryptedKey, getEncryptedPrivateKey } from '../utils/crypto';
+import EthCrypto from 'eth-crypto';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function UserProfile() {
@@ -17,6 +18,58 @@ function UserProfile() {
   const [featureModalText, setFeatureModalText] = useState('');
   const [balance, setBalance] = useState(null);
   const [walletConnected, setWalletConnected] = useState(!!window.ethereum);
+  const [debugPassphrase, setDebugPassphrase] = useState('');
+  const [debugDecryptedPrivateKey, setDebugDecryptedPrivateKey] = useState('');
+  const [debugDerivedPublicKey, setDebugDerivedPublicKey] = useState('');
+  const [debugMatch, setDebugMatch] = useState('');
+
+  const handleDebugCheck = async () => {
+    setDebugDecryptedPrivateKey('');
+    setDebugDerivedPublicKey('');
+    setDebugMatch('');
+    try {
+      // Render account and all localStorage keys
+      let encryptedPrivateKey = getEncryptedPrivateKey(account);
+      let debugKeyUsed = `docu3_privateKey_${account}`;
+      if (!encryptedPrivateKey) {
+        // Try case-insensitive lookup
+        const allKeys = Object.keys(localStorage);
+        const foundKey = allKeys.find(k => k.toLowerCase() === `docu3_privatekey_${account.toLowerCase()}`);
+        if (foundKey) {
+          encryptedPrivateKey = localStorage.getItem(foundKey);
+          debugKeyUsed = foundKey;
+        }
+      }
+      if (!encryptedPrivateKey) {
+        setDebugDecryptedPrivateKey('No encrypted key in localStorage');
+        setDebugDerivedPublicKey('');
+        setDebugMatch('');
+        return;
+      }
+      const CryptoJS = require('crypto-js');
+      const bytes = CryptoJS.AES.decrypt(encryptedPrivateKey, debugPassphrase);
+      const decryptedPrivateKey = bytes.toString(CryptoJS.enc.Utf8);
+      setDebugDecryptedPrivateKey(decryptedPrivateKey || 'FAILED');
+      if (!decryptedPrivateKey || decryptedPrivateKey.length < 64) {
+        setDebugDerivedPublicKey('FAILED');
+        setDebugMatch('No');
+        return;
+      }
+      // EthCrypto expects private key without 0x prefix
+      const cleanPrivateKey = decryptedPrivateKey.startsWith('0x') ? decryptedPrivateKey.slice(2) : decryptedPrivateKey;
+      const derivedPublicKey = EthCrypto.publicKeyByPrivateKey(cleanPrivateKey);
+      setDebugDerivedPublicKey(derivedPublicKey || 'FAILED');
+      if (profile && profile.publicKey) {
+        setDebugMatch(derivedPublicKey === profile.publicKey ? 'Yes' : 'No');
+      } else {
+        setDebugMatch('No profile public key');
+      }
+    } catch (e) {
+      setDebugDecryptedPrivateKey('FAILED: ' + (e.message || 'error'));
+      setDebugDerivedPublicKey('FAILED');
+      setDebugMatch('Error');
+    }
+  };
 
   useEffect(() => {
     async function fetchProfile() {
@@ -25,7 +78,9 @@ function UserProfile() {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
         const [firstName, familyName, email, dob, , publicKey] = await contract.getUserProfile(account);
-        setProfile({ firstName, familyName, email, dob, publicKey });
+        // Always use the on-chain address for key operations
+        const onChainAddress = account;
+        setProfile({ firstName, familyName, email, dob, publicKey, onChainAddress });
       } catch (err) {
       } finally {
         setLoading(false);
@@ -71,6 +126,18 @@ function UserProfile() {
           <div><strong>Family Name:</strong> {profile.familyName}</div>
           <div><strong>Email:</strong> {profile.email}</div>
           <div><strong>Date of Birth:</strong> {profile.dob && new Date(Number(profile.dob) * 1000).toLocaleDateString()}</div>
+          <div>
+            <strong>Public Key:</strong>
+            <span
+              className="font-mono break-all cursor-pointer inline-block max-w-full align-middle"
+              title={profile.publicKey}
+              style={{ wordBreak: 'break-all' }}
+            >
+              {profile.publicKey
+                ? `${profile.publicKey.slice(0, 12)}...${profile.publicKey.slice(-8)}`
+                : ''}
+            </span>
+          </div>
           <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-4">
             <div className="flex flex-wrap gap-4 items-center">
               <button
@@ -119,7 +186,7 @@ function UserProfile() {
                     <div className="flex flex-col items-center space-y-4">
                       <p className="text-sm text-gray-700 text-center">Download your encrypted private key for backup. Keep it safe!</p>
                       <button
-                        onClick={() => downloadEncryptedKey(account)}
+                        onClick={() => downloadEncryptedKey(profile?.onChainAddress || account)}
                         className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold"
                       >
                         Download Encrypted Key
@@ -139,7 +206,7 @@ function UserProfile() {
                           reader.onload = function(ev) {
                             const encryptedKey = ev.target.result;
                             try {
-                              restoreEncryptedKey(account, encryptedKey);
+                              restoreEncryptedKey(profile?.onChainAddress || account, encryptedKey);
                               setRestoreStatus('Key restored successfully.');
                             } catch {
                               setRestoreStatus('Failed to restore key.');
@@ -159,7 +226,7 @@ function UserProfile() {
                       <button
                         onClick={() => {
                           try {
-                            restoreEncryptedKey(account, uploadKeyText);
+                            restoreEncryptedKey(profile?.onChainAddress || account, uploadKeyText);
                             setRestoreStatus('Key restored successfully.');
                           } catch {
                             setRestoreStatus('Failed to restore key.');
@@ -196,6 +263,32 @@ function UserProfile() {
                 </div>
               </div>
             )}
+            {/* Debug: Compare derived public key from decrypted private key with on-chain public key */}
+            <div className="mt-4 p-4 bg-gray-100 rounded">
+              <div className="font-semibold mb-2">Debug: Key Consistency Check</div>
+              <div className="mb-2 text-xs text-gray-700 break-all">
+                <div><b>Account:</b> {account}</div>
+                <div><b>LocalStorage Keys:</b> {Object.keys(localStorage).filter(k => k.startsWith('docu3_privateKey_')).join(', ')}</div>
+                <div><b>On-chain Public Key:</b> {profile.publicKey || 'N/A'}</div>
+                <div><b>Decrypted Private Key:</b> {debugDecryptedPrivateKey}</div>
+                <div><b>Derived Public Key:</b> {debugDerivedPublicKey}</div>
+                <div><b>Match:</b> {debugMatch}</div>
+              </div>
+              <input
+                type="password"
+                placeholder="Enter passphrase to check"
+                value={debugPassphrase}
+                onChange={e => setDebugPassphrase(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded mb-2"
+              />
+              <button
+                onClick={handleDebugCheck}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold"
+                disabled={!debugPassphrase}
+              >
+                Check Key Consistency
+              </button>
+            </div>
           </div>
         </div>
       ) : (

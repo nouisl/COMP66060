@@ -75,7 +75,10 @@ export async function getDecryptedPrivateKey(userAddress, passphrase) {
 
 export async function encryptDocument(fileBuffer, uploader, signerAddresses, getPublicKey) {
   const allRecipients = [uploader, ...signerAddresses];
-  const symmetricKey = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
+  // Generate a random 32-byte base64 string for the symmetric key
+  const array = new Uint8Array(32);
+  window.crypto.getRandomValues(array);
+  const symmetricKey = btoa(String.fromCharCode(...array));
   const encryptedFile = CryptoJS.AES.encrypt(CryptoJS.lib.WordArray.create(fileBuffer), symmetricKey).toString();
   const encryptedKeys = {};
   for (const addr of allRecipients) {
@@ -90,7 +93,9 @@ export async function decryptDocument(encryptedFile, encryptedKeys, userAddress,
   const encryptedSymmetricKey = encryptedKeys[userAddress];
   const cipher = EthCrypto.cipher.parse(encryptedSymmetricKey);
   const privateKey = await getDecryptedPrivateKey(userAddress, passphrase);
-  const symmetricKey = await EthCrypto.decryptWithPrivateKey(privateKey, cipher);
+  // EthCrypto expects private key without 0x prefix
+  const cleanPrivateKey = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey;
+  const symmetricKey = await EthCrypto.decryptWithPrivateKey(cleanPrivateKey, cipher);
   const decrypted = CryptoJS.AES.decrypt(encryptedFile, symmetricKey);
   const decryptedBytes = decrypted.sigBytes > 0 ? decrypted : null;
   if (!decryptedBytes) throw new Error('Failed to decrypt document');
