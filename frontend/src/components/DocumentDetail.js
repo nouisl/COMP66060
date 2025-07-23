@@ -22,6 +22,24 @@ function truncateMiddle(str, frontLen = 8, backLen = 6) {
   return str.slice(0, frontLen) + '...' + str.slice(-backLen);
 }
 
+function CopyButton({ value }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      }}
+      className="ml-2 text-xs px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 border border-gray-300 focus:outline-none"
+      title="Copy to clipboard"
+    >
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
+  );
+}
+
 function DocumentDetail() {
   const { docId } = useParams();
   const dispatch = useNotification();
@@ -50,9 +68,6 @@ function DocumentDetail() {
   const [passphrase, setPassphrase] = useState('');
   const [passModalError, setPassModalError] = useState('');
   const [noKeyModal, setNoKeyModal] = useState(false);
-  const [debugDecryptedPrivateKey, setDebugDecryptedPrivateKey] = useState('');
-  const [debugSymmetricKeySuccess, setDebugSymmetricKeySuccess] = useState('');
-  const [debugDocumentDecryptionSuccess, setDebugDocumentDecryptionSuccess] = useState('');
 
   useEffect(() => {
     async function fetchDoc() {
@@ -130,6 +145,10 @@ function DocumentDetail() {
         setIsCurrentSigner(currentSigner === userAddress);
         const signed = await contract.hasSigned(docIdNum, userAddress);
         setHasSigned(signed);
+        // Always show persistent message if already signed
+        if (signed && !success) {
+          setSuccess('You have already signed this document!');
+        }
         const signaturesData = {};
         const verificationData = {};
         if (Array.isArray(docObj.signers) && docObj.signers.length > 0 && meta && meta.documentHash) {
@@ -184,7 +203,43 @@ function DocumentDetail() {
       }
       const signature = await signDocumentHash(hashToSign, signer);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
-      const tx = await contract.signDocument(docId, signature);
+      let tx;
+      let retryCount = 0;
+      const maxRetries = 3;
+      const attemptTransaction = async () => {
+        const gasEstimate = await contract.signDocument.estimateGas(docId, signature);
+        try {
+          const { fetchGasPrices, getGasConfig } = await import('../utils/gasStation');
+          const gasPrices = await fetchGasPrices();
+          const gasConfig = getGasConfig(gasPrices, 'standard');
+          return await contract.signDocument(docId, signature, {
+            gasLimit: gasEstimate * 150n / 100n,
+            ...gasConfig
+          });
+        } catch (gasError) {
+          const fallbackGasConfig = {
+            maxFeePerGas: ethers.parseUnits('50', 'gwei'),
+            maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei')
+          };
+          return await contract.signDocument(docId, signature, {
+            gasLimit: gasEstimate * 150n / 100n,
+            ...fallbackGasConfig
+          });
+        }
+      };
+      while (retryCount < maxRetries) {
+        try {
+          tx = await attemptTransaction();
+          break;
+        } catch (err) {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            throw err;
+          }
+          const delay = 2000 * retryCount;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
       await tx.wait();
       setSuccess('Document cryptographically signed successfully!');
       dispatch({
@@ -284,7 +339,6 @@ function DocumentDetail() {
   const handleDecrypt = async () => {
     setDecryptionError('');
     setPassModalError('');
-    // Check for encrypted private key in localStorage
     const encryptedPrivateKey = getEncryptedPrivateKey(account);
     if (!encryptedPrivateKey) {
       setNoKeyModal(true);
@@ -296,19 +350,13 @@ function DocumentDetail() {
   const handlePassphraseDecrypt = async () => {
     setDecrypting(true);
     setPassModalError('');
-    setDebugDecryptedPrivateKey('');
-    setDebugSymmetricKeySuccess('');
-    setDebugDocumentDecryptionSuccess('');
     try {
       let decryptedPrivateKey = '';
       try {
         decryptedPrivateKey = await getDecryptedPrivateKey(account, passphrase);
-        setDebugDecryptedPrivateKey(decryptedPrivateKey ? decryptedPrivateKey.slice(0, 10) + '...' : '');
       } catch (e) {
-        setDebugDecryptedPrivateKey('FAILED: ' + (e.message || 'error'));
         throw new Error('Private key decryption failed. Wrong passphrase or corrupted key.');
       }
-      // Case-insensitive lookup for encrypted symmetric key
       const encryptedKeys = metadata?.asym?.encryptedKeys || {};
       const foundEntry = Object.entries(encryptedKeys).find(
         ([key]) => key === account
@@ -320,9 +368,7 @@ function DocumentDetail() {
         const cipher = EthCrypto.cipher.parse(encryptedKey);
         const cleanPrivateKey = decryptedPrivateKey.startsWith('0x') ? decryptedPrivateKey.slice(2) : decryptedPrivateKey;
         symmetricKeyHex = await EthCrypto.decryptWithPrivateKey(cleanPrivateKey, cipher);
-        setDebugSymmetricKeySuccess('true');
       } catch (e) {
-        setDebugSymmetricKeySuccess('FAILED: ' + (e.message || 'error'));
         throw new Error('Symmetric key decryption failed. Your private key does not match the one used to encrypt this document.');
       }
       let documentDecryptionSuccess = false;
@@ -360,7 +406,6 @@ function DocumentDetail() {
           iv
         );
         documentDecryptionSuccess = !!decryptedBuffer;
-        setDebugDocumentDecryptionSuccess(documentDecryptionSuccess ? 'true' : 'false');
         if (!documentDecryptionSuccess) throw new Error('Failed to decrypt document');
         let ext = '';
         if (metadata.file && metadata.file.name) {
@@ -379,7 +424,6 @@ function DocumentDetail() {
         setShowPassModal(false);
         setPassphrase('');
       } catch (e) {
-        setDebugDocumentDecryptionSuccess('FAILED: ' + (e.message || 'error'));
         throw new Error('Document decryption failed. The symmetric key may be wrong or the document is corrupted.');
       }
     } catch (err) {
@@ -410,12 +454,12 @@ function DocumentDetail() {
   };
 
   return (
-    <div className="min-h-screen flex justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-2">
+    <>
       {loading && <div className="text-center py-8">Loading document...</div>}
       {!loading && error && <div className="text-center text-red-600 py-8">{error}</div>}
       {!loading && !error && !doc && <div className="text-center py-8">Document not found</div>}
       {!loading && !error && doc && (
-        <div className="w-full max-w-4xl bg-white rounded-xl shadow-lg p-8 mx-auto mt-10">
+        <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-md p-8 mt-8">
           <h2 className="text-3xl font-bold mb-8 text-gray-900 text-center">Document Details</h2>
           <div className="grid md:grid-cols-2 gap-8 mb-8">
             <div>
@@ -425,10 +469,10 @@ function DocumentDetail() {
                   <div className="flex justify-between"><span className="font-semibold">Document ID:</span> <span>{docId}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Title:</span> <span title={metadata?.title}>{truncateMiddle(metadata?.title, 18, 8) || <span className="text-gray-400 italic">N/A</span>}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Description:</span> <span title={metadata?.description}>{truncateMiddle(metadata?.description, 18, 8) || <span className="text-gray-400 italic">N/A</span>}</span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Creator:</span> <span title={doc.creator} className="font-mono">{truncateMiddle(doc.creator, 10, 8)}</span></div>
-                  <div className="flex justify-between"><span className="font-semibold">IPFS Hash:</span> <span title={doc.ipfsHash} className="font-mono">{truncateMiddle(doc.ipfsHash, 12, 12)}</span></div>
+                  <div className="flex justify-between"><span className="font-semibold">Creator:</span> <span title={doc.creator} className="font-mono flex items-center">{truncateMiddle(doc.creator, 10, 8)}<CopyButton value={doc.creator} /></span></div>
+                  <div className="flex justify-between"><span className="font-semibold">IPFS Hash:</span> <span title={doc.ipfsHash} className="font-mono flex items-center">{truncateMiddle(doc.ipfsHash, 12, 12)}<CopyButton value={doc.ipfsHash} /></span></div>
                   <div className="flex justify-between"><span className="font-semibold">Status:</span> <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${doc.isRevoked ? 'bg-red-100 text-red-700' : doc.fullySigned ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : 'Pending'}</span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Signatures:</span> <span>{doc.signatureCount}/{doc.signers?.length || 0}</span></div>
+                  <div className="flex justify-between"><span className="font-semibold">Signatures:</span> <span>{Number(doc.signatureCount) || 0}/{doc.signers?.length || 0}</span></div>
                 </div>
               </div>
             </div>
@@ -440,10 +484,14 @@ function DocumentDetail() {
                     <div key={signer} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
                       <span className="font-mono text-xs truncate max-w-[160px]" title={signer}>{truncateMiddle(signer, 10, 8)}</span>
                       <div className="flex items-center space-x-2">
-                        {signatures[signer] ? (
+                        {(signer === account && hasSigned) ? (
                           <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-700 text-xs font-semibold">Signed</span>
                         ) : (
-                          <span className="inline-block px-2 py-0.5 rounded bg-yellow-100 text-yellow-700 text-xs font-semibold">Pending</span>
+                          signatures[signer] ? (
+                            <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-700 text-xs font-semibold">Signed</span>
+                          ) : (
+                            <span className="inline-block px-2 py-0.5 rounded bg-yellow-100 text-yellow-700 text-xs font-semibold">Pending</span>
+                          )
                         )}
                         {signatures[signer] && signatureVerification[signer] !== undefined && (
                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${signatureVerification[signer] ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>{signatureVerification[signer] ? 'Valid' : 'Invalid'}</span>
@@ -477,6 +525,7 @@ function DocumentDetail() {
             <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200 flex flex-col items-center">
               <div className="flex-1 w-full text-center">
                 <h3 className="text-base font-semibold mb-1 text-green-900">Decrypted Document</h3>
+                {/* Inline preview for images and PDFs */}
                 {(() => {
                   const ext = metadata?.file?.name?.split('.').pop()?.toLowerCase();
                   if (['jpg', 'jpeg', 'png'].includes(ext)) {
@@ -606,16 +655,6 @@ function DocumentDetail() {
                 <p className="text-sm text-gray-700 mb-4 text-center">
                   Please enter your passphrase to decrypt your private key and access this encrypted document.
                 </p>
-                {/* Debug info for account and metadata keys */}
-                <div className="mb-2 text-xs text-gray-500 break-all">
-                  <div><b>Account:</b> {account}</div>
-                  <div><b>Metadata Keys:</b> {Object.keys(metadata?.asym?.encryptedKeys || {}).join(', ')}</div>
-                  <div><b>Lookup Result:</b> {String(!!Object.entries(metadata?.asym?.encryptedKeys || {}).find(([key]) => key === account))}</div>
-                  <div><b>Found Key:</b> {Object.entries(metadata?.asym?.encryptedKeys || {}).find(([key]) => key === account)?.[0] || 'None'}</div>
-                  <div><b>Decrypted Private Key:</b> {debugDecryptedPrivateKey}</div>
-                  <div><b>Symmetric Key Decryption:</b> {debugSymmetricKeySuccess}</div>
-                  <div><b>Document Decryption:</b> {debugDocumentDecryptionSuccess}</div>
-                </div>
                 <input
                   type="password"
                   placeholder="Passphrase"
@@ -669,7 +708,7 @@ function DocumentDetail() {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
