@@ -484,14 +484,10 @@ function DocumentDetail() {
                     <div key={signer} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
                       <span className="font-mono text-xs truncate max-w-[160px]" title={signer}>{truncateMiddle(signer, 10, 8)}</span>
                       <div className="flex items-center space-x-2">
-                        {(signer === account && hasSigned) ? (
+                        {doc.fullySigned || (signer === account && hasSigned) || signatures[signer] ? (
                           <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-700 text-xs font-semibold">Signed</span>
                         ) : (
-                          signatures[signer] ? (
-                            <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-700 text-xs font-semibold">Signed</span>
-                          ) : (
-                            <span className="inline-block px-2 py-0.5 rounded bg-yellow-100 text-yellow-700 text-xs font-semibold">Pending</span>
-                          )
+                          <span className="inline-block px-2 py-0.5 rounded bg-yellow-100 text-yellow-700 text-xs font-semibold">Pending</span>
                         )}
                         {signatures[signer] && signatureVerification[signer] !== undefined && (
                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${signatureVerification[signer] ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>{signatureVerification[signer] ? 'Valid' : 'Invalid'}</span>
@@ -622,30 +618,34 @@ function DocumentDetail() {
             </div>
           )}
 
-          {Object.keys(signatures).length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-lg font-semibold mb-4 text-blue-900">Signatures</h3>
-              <div className="space-y-2">
-                {Object.entries(signatures).map(([signer, signature]) => (
-                  <div key={signer} className="p-4 bg-gray-50 rounded-lg flex flex-col md:flex-row md:items-center md:justify-between border border-gray-200">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs"><strong>Signer:</strong> <span className="font-mono" title={signer}>{truncateMiddle(signer, 10, 8)}</span></p>
-                      <p className="text-xs"><strong>Signature:</strong> <span className="font-mono break-all" title={signature}>{formatSignature(signature)}</span></p>
-                      {signatureVerification[signer] !== undefined && (
-                        <p className="text-xs"><strong>Verification:</strong> <span className={signatureVerification[signer] ? 'text-green-600' : 'text-red-600'}>{signatureVerification[signer] ? 'Valid' : 'Invalid'}</span></p>
-                      )}
-                    </div>
+          <div className="mt-8">
+            <h3 className="text-lg font-semibold mb-4 text-blue-900">Signatures</h3>
+            <div className="space-y-2">
+              {doc.signers?.map((signer) => (
+                <div key={signer} className="p-4 bg-gray-50 rounded-lg flex flex-col md:flex-row md:items-center md:justify-between border border-gray-200">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs"><strong>Signer:</strong> <span className="font-mono" title={signer}>{truncateMiddle(signer, 10, 8)}</span></p>
+                    <p className="text-xs"><strong>Signature:</strong> {signatures[signer] ? (
+                      <span className="font-mono break-all" title={signatures[signer]}>{formatSignature(signatures[signer])} <CopyButton value={signatures[signer]} /></span>
+                    ) : (
+                      <span className="text-gray-400 italic">Pending</span>
+                    )}</p>
+                    {signatures[signer] && signatureVerification[signer] !== undefined && (
+                      <p className="text-xs"><strong>Verification:</strong> <span className={signatureVerification[signer] ? 'text-green-600' : 'text-red-600'}>{signatureVerification[signer] ? 'Valid' : 'Invalid'}</span></p>
+                    )}
+                  </div>
+                  {signatures[signer] && (
                     <button
-                      onClick={() => copyVerificationDetails(signer, signature)}
+                      onClick={() => copyVerificationDetails(signer, signatures[signer])}
                       className="mt-2 md:mt-0 md:ml-4 px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
                     >
                       Copy Verification
                     </button>
-                  </div>
-                ))}
-              </div>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
+          </div>
 
           {/* Passphrase Modal */}
           {showPassModal && (
