@@ -355,7 +355,7 @@ function DocumentDetail() {
       try {
         decryptedPrivateKey = await getDecryptedPrivateKey(account, passphrase);
       } catch (e) {
-        throw new Error('Private key decryption failed. Wrong passphrase or corrupted key.');
+        throw new Error('Wrong passphrase. Please try again.');
       }
       const encryptedKeys = metadata?.asym?.encryptedKeys || {};
       const foundEntry = Object.entries(encryptedKeys).find(
@@ -663,7 +663,7 @@ function DocumentDetail() {
                   className="w-full px-3 py-2 border border-gray-300 rounded mb-4"
                   disabled={decrypting}
                 />
-                {passModalError && <p className="text-red-500 text-sm text-center">{passModalError}</p>}
+                {passModalError && <p className="text-red-500 text-sm text-center mb-4">{passModalError}</p>}
                 <div className="flex justify-center space-x-4">
                   <button
                     onClick={handlePassphraseDecrypt}
