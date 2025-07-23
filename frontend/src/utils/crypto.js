@@ -127,7 +127,7 @@ export async function getDecryptedPrivateKey(userAddress, passphrase) {
   const decryptedPrivateKey = bytes.toString(CryptoJS.enc.Utf8);
   if (!decryptedPrivateKey) throw new Error('Decryption failed. Wrong passphrase?');
   return decryptedPrivateKey;
-}
+ }
 
 export function downloadEncryptedKey(userAddress) {
   const encryptedKey = getEncryptedPrivateKey(userAddress);
