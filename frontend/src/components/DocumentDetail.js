@@ -151,12 +151,12 @@ function DocumentDetail() {
         }
         const signaturesData = {};
         const verificationData = {};
-        if (Array.isArray(docObj.signers) && docObj.signers.length > 0 && meta && meta.documentHash) {
+        if (Array.isArray(docObj.signers) && docObj.signers.length > 0) {
           for (const signer of docObj.signers) {
             try {
               const signature = await contract.getSignature(docIdNum, signer);
               signaturesData[signer] = signature;
-              if (signature) {
+              if (signature && meta && meta.documentHash) {
                 const isValid = verifySignature(meta.documentHash, signature, signer);
                 verificationData[signer] = isValid;
               }
@@ -458,6 +458,9 @@ function DocumentDetail() {
       {loading && <div className="text-center py-8">Loading document...</div>}
       {!loading && error && <div className="text-center text-red-600 py-8">{error}</div>}
       {!loading && !error && !doc && <div className="text-center py-8">Document not found</div>}
+      
+      
+      
       {!loading && !error && doc && (
         <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-md p-8 mt-8">
           <h2 className="text-3xl font-bold mb-8 text-gray-900 text-center">Document Details</h2>
@@ -618,6 +621,8 @@ function DocumentDetail() {
             </div>
           )}
 
+
+
           <div className="mt-8">
             <h3 className="text-lg font-semibold mb-4 text-blue-900">Signatures</h3>
             <div className="space-y-2">
@@ -625,8 +630,23 @@ function DocumentDetail() {
                 <div key={signer} className="p-4 bg-gray-50 rounded-lg flex flex-col md:flex-row md:items-center md:justify-between border border-gray-200">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs"><strong>Signer:</strong> <span className="font-mono" title={signer}>{truncateMiddle(signer, 10, 8)}</span></p>
-                    <p className="text-xs"><strong>Signature:</strong> {signatures[signer] ? (
-                      <span className="font-mono break-all" title={signatures[signer]}>{formatSignature(signatures[signer])} <CopyButton value={signatures[signer]} /></span>
+                    <p className="text-xs"><strong>Signature:</strong> {signatures[signer] || (signer === account && hasSigned) ? (
+                      <span className="font-mono break-all" title={signatures[signer] || 'Signed by current user'}>
+                        {signatures[signer] ? (
+                          <>
+                            {formatSignature(signatures[signer])} 
+                            <CopyButton value={signatures[signer]} />
+                            <details className="mt-1">
+                              <summary className="text-xs text-blue-600 cursor-pointer">Show full signature</summary>
+                              <div className="text-xs font-mono break-all bg-gray-100 p-2 rounded mt-1">{signatures[signer]}</div>
+                            </details>
+                          </>
+                        ) : (
+                          <>
+                            Signed <CopyButton value="Signed by current user" />
+                          </>
+                        )}
+                      </span>
                     ) : (
                       <span className="text-gray-400 italic">Pending</span>
                     )}</p>
@@ -634,9 +654,9 @@ function DocumentDetail() {
                       <p className="text-xs"><strong>Verification:</strong> <span className={signatureVerification[signer] ? 'text-green-600' : 'text-red-600'}>{signatureVerification[signer] ? 'Valid' : 'Invalid'}</span></p>
                     )}
                   </div>
-                  {signatures[signer] && (
+                  {(signatures[signer] || (signer === account && hasSigned)) && (
                     <button
-                      onClick={() => copyVerificationDetails(signer, signatures[signer])}
+                      onClick={() => copyVerificationDetails(signer, signatures[signer] || 'Signed by current user')}
                       className="mt-2 md:mt-0 md:ml-4 px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
                     >
                       Copy Verification
