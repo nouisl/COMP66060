@@ -71,9 +71,7 @@ function DocumentList() {
               <tr>
                 <th className="py-2 px-4 border-b">ID</th>
                 <th className="py-2 px-4 border-b">Title / File Name</th>
-                <th className="py-2 px-4 border-b">File Hash</th>
                 <th className="py-2 px-4 border-b">IPFS Hash</th>
-                <th className="py-2 px-4 border-b">Metadata Status</th>
                 <th className="py-2 px-4 border-b">Creator</th>
                 <th className="py-2 px-4 border-b">Status</th>
                 <th className="py-2 px-4 border-b">Action</th>
@@ -91,16 +89,9 @@ function DocumentList() {
                         : <span className="text-gray-400 italic">N/A</span>
                     }
                   </td>
-                  <td className="py-2 px-4 border-b max-w-[120px] truncate" title={doc._metadata && doc._metadata.documentHash ? doc._metadata.documentHash : ''}>
-                    {doc._metadata && doc._metadata.documentHash
-                      ? truncateMiddle(doc._metadata.documentHash)
-                      : <span className="text-gray-400 italic">N/A</span>
-                    }
-                  </td>
                   <td className="py-2 px-4 border-b max-w-[220px] truncate" title={doc.ipfsHash || ''}>
                     {doc.ipfsHash ? truncateMiddle(doc.ipfsHash, 12, 12) : <span className="text-gray-400 italic">N/A</span>}
                   </td>
-                  <td className="py-2 px-4 border-b">{doc._metadata ? <span className="text-green-600">Found</span> : <span className="text-red-600">Missing</span>}</td>
                   <td className="py-2 px-4 border-b max-w-[180px] truncate" title={doc.creator || ''}>
                     {doc.creator ? truncateMiddle(doc.creator, 10, 8) : <span className="text-gray-400 italic">N/A</span>}
                   </td>
