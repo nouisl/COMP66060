@@ -18,58 +18,6 @@ function UserProfile() {
   const [featureModalText, setFeatureModalText] = useState('');
   const [balance, setBalance] = useState(null);
   const [walletConnected, setWalletConnected] = useState(!!window.ethereum);
-  const [debugPassphrase, setDebugPassphrase] = useState('');
-  const [debugDecryptedPrivateKey, setDebugDecryptedPrivateKey] = useState('');
-  const [debugDerivedPublicKey, setDebugDerivedPublicKey] = useState('');
-  const [debugMatch, setDebugMatch] = useState('');
-
-  const handleDebugCheck = async () => {
-    setDebugDecryptedPrivateKey('');
-    setDebugDerivedPublicKey('');
-    setDebugMatch('');
-    try {
-      // Render account and all localStorage keys
-      let encryptedPrivateKey = getEncryptedPrivateKey(account);
-      let debugKeyUsed = `docu3_privateKey_${account}`;
-      if (!encryptedPrivateKey) {
-        // Try case-insensitive lookup
-        const allKeys = Object.keys(localStorage);
-        const foundKey = allKeys.find(k => k.toLowerCase() === `docu3_privatekey_${account.toLowerCase()}`);
-        if (foundKey) {
-          encryptedPrivateKey = localStorage.getItem(foundKey);
-          debugKeyUsed = foundKey;
-        }
-      }
-      if (!encryptedPrivateKey) {
-        setDebugDecryptedPrivateKey('No encrypted key in localStorage');
-        setDebugDerivedPublicKey('');
-        setDebugMatch('');
-        return;
-      }
-      const CryptoJS = require('crypto-js');
-      const bytes = CryptoJS.AES.decrypt(encryptedPrivateKey, debugPassphrase);
-      const decryptedPrivateKey = bytes.toString(CryptoJS.enc.Utf8);
-      setDebugDecryptedPrivateKey(decryptedPrivateKey || 'FAILED');
-      if (!decryptedPrivateKey || decryptedPrivateKey.length < 64) {
-        setDebugDerivedPublicKey('FAILED');
-        setDebugMatch('No');
-        return;
-      }
-      // EthCrypto expects private key without 0x prefix
-      const cleanPrivateKey = decryptedPrivateKey.startsWith('0x') ? decryptedPrivateKey.slice(2) : decryptedPrivateKey;
-      const derivedPublicKey = EthCrypto.publicKeyByPrivateKey(cleanPrivateKey);
-      setDebugDerivedPublicKey(derivedPublicKey || 'FAILED');
-      if (profile && profile.publicKey) {
-        setDebugMatch(derivedPublicKey === profile.publicKey ? 'Yes' : 'No');
-      } else {
-        setDebugMatch('No profile public key');
-      }
-    } catch (e) {
-      setDebugDecryptedPrivateKey('FAILED: ' + (e.message || 'error'));
-      setDebugDerivedPublicKey('FAILED');
-      setDebugMatch('Error');
-    }
-  };
 
   useEffect(() => {
     async function fetchProfile() {
@@ -263,32 +211,6 @@ function UserProfile() {
                 </div>
               </div>
             )}
-            {/* Debug: Compare derived public key from decrypted private key with on-chain public key */}
-            <div className="mt-4 p-4 bg-gray-100 rounded">
-              <div className="font-semibold mb-2">Debug: Key Consistency Check</div>
-              <div className="mb-2 text-xs text-gray-700 break-all">
-                <div><b>Account:</b> {account}</div>
-                <div><b>LocalStorage Keys:</b> {Object.keys(localStorage).filter(k => k.startsWith('docu3_privateKey_')).join(', ')}</div>
-                <div><b>On-chain Public Key:</b> {profile.publicKey || 'N/A'}</div>
-                <div><b>Decrypted Private Key:</b> {debugDecryptedPrivateKey}</div>
-                <div><b>Derived Public Key:</b> {debugDerivedPublicKey}</div>
-                <div><b>Match:</b> {debugMatch}</div>
-              </div>
-              <input
-                type="password"
-                placeholder="Enter passphrase to check"
-                value={debugPassphrase}
-                onChange={e => setDebugPassphrase(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded mb-2"
-              />
-              <button
-                onClick={handleDebugCheck}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold"
-                disabled={!debugPassphrase}
-              >
-                Check Key Consistency
-              </button>
-            </div>
           </div>
         </div>
       ) : (
