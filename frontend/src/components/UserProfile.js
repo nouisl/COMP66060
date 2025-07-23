@@ -86,6 +86,15 @@ function UserProfile() {
                 : ''}
             </span>
           </div>
+          {/* Debug Section */}
+          <div className="mt-8 p-4 bg-gray-100 rounded">
+            <div className="font-semibold mb-2">Debug Info</div>
+            <div className="mb-2 text-xs text-gray-700 break-all">
+              <div><b>Account:</b> {account}</div>
+              <div><b>LocalStorage Keys:</b> {Object.keys(localStorage).filter(k => k.startsWith('docu3_privateKey_')).join(', ')}</div>
+              <div><b>On-chain Public Key:</b> {profile.publicKey || 'N/A'}</div>
+            </div>
+          </div>
           <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-4">
             <div className="flex flex-wrap gap-4 items-center">
               <button
