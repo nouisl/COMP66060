@@ -21,10 +21,6 @@ function DocumentUpload() {
   const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
   const dispatch = useNotification();
   const navigate = useNavigate();
-  const [debugEncryptedKeys, setDebugEncryptedKeys] = useState(null);
-  const [debugRawEncryptedKeys, setDebugRawEncryptedKeys] = useState(null);
-  const [debugUpload, setDebugUpload] = useState({});
-  const [debugEncrypt, setDebugEncrypt] = useState(null);
 
   useEffect(() => {
     async function fetchRegisteredUsers() {
@@ -97,14 +93,7 @@ function DocumentUpload() {
         if (!publicKey) throw new Error(`No public key found for address: ${addr}`);
         publicKeys[addr] = publicKey;
       }
-      setDebugUpload({
-        fileBufferType: fileBuffer.constructor.name,
-        fileBufferLength: fileBuffer.byteLength,
-        allRecipients,
-        publicKeys
-      });
       const { encryptedFile, encryptedKeys, iv, debug } = await encryptDocument(fileBuffer, uploaderAddress, validSignerAddresses, getPublicKey);
-      setDebugEncrypt(debug);
       const metadata = {
         title,
         description,
@@ -387,30 +376,6 @@ function DocumentUpload() {
             {uploading ? 'Uploading...' : 'Upload Document'}
           </button>
       </form>
-      {debugRawEncryptedKeys && (
-        <div className="mt-8 p-4 bg-yellow-100 rounded border border-yellow-300">
-          <div className="font-semibold mb-2">Debug: Raw EncryptedKey Objects (per address)</div>
-          <pre className="text-xs break-all whitespace-pre-wrap">{JSON.stringify(debugRawEncryptedKeys, null, 2)}</pre>
-        </div>
-      )}
-      {debugEncryptedKeys && (
-        <div className="mt-8 p-4 bg-gray-100 rounded border border-gray-300">
-          <div className="font-semibold mb-2">Debug: Encrypted Keys (cipher.stringify, to be stored in metadata)</div>
-          <pre className="text-xs break-all whitespace-pre-wrap">{JSON.stringify(debugEncryptedKeys, null, 2)}</pre>
-        </div>
-      )}
-      {debugUpload && Object.keys(debugUpload).length > 0 && (
-        <div className="mt-8 p-4 bg-red-100 rounded border border-red-300">
-          <div className="font-semibold mb-2">Debug: Upload Inputs</div>
-          <pre className="text-xs break-all whitespace-pre-wrap">{JSON.stringify(debugUpload, null, 2)}</pre>
-        </div>
-      )}
-      {debugEncrypt && (
-        <div className="mt-8 p-4 bg-orange-100 rounded border border-orange-300">
-          <div className="font-semibold mb-2">Debug: encryptDocument Output</div>
-          <pre className="text-xs break-all whitespace-pre-wrap">{JSON.stringify(debugEncrypt, null, 2)}</pre>
-        </div>
-      )}
     </div>
   </div>
   );
