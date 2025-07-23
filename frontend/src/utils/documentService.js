@@ -79,14 +79,23 @@ class DocumentService {
     let signedDocs = 0;
     let createdDocs = 0;
 
-    docs.forEach(doc => {
+    for (const doc of docs) {
       const isSigner = doc.signers && doc.signers.map(addr => addr.toLowerCase()).includes(account?.toLowerCase());
       const isCreator = doc.creator && doc.creator.toLowerCase() === account?.toLowerCase();
-      
       if (isCreator) createdDocs++;
-      if (isSigner && !doc.fullySigned) pendingSigs++;
+      if (isSigner && !doc.fullySigned) {
+        try {
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
+          const docIdNum = typeof doc.docId === 'string' ? parseInt(doc.docId, 10) : doc.docId;
+          const hasSigned = await contract.hasSigned(docIdNum, account);
+          if (!hasSigned) pendingSigs++;
+        } catch (e) {
+          pendingSigs++;
+        }
+      }
       if (doc.fullySigned) signedDocs++;
-    });
+    }
 
     return {
       totalDocuments: totalDocs,
