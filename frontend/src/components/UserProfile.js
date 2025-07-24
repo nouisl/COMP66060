@@ -135,7 +135,7 @@ function UserProfile() {
                     <div className="flex flex-col items-center space-y-4">
                       <p className="text-sm text-gray-700 text-center">Download your encrypted private key for backup. Keep it safe!</p>
                       <button
-                        onClick={() => downloadEncryptedKey(profile?.onChainAddress || account)}
+                        onClick={() => downloadEncryptedKey(account)}
                         className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold"
                       >
                         Download Encrypted Key
@@ -155,7 +155,7 @@ function UserProfile() {
                           reader.onload = function(ev) {
                             const encryptedKey = ev.target.result;
                             try {
-                              restoreEncryptedKey(profile?.onChainAddress || account, encryptedKey);
+                              restoreEncryptedKey(account, encryptedKey);
                               setRestoreStatus('Key restored successfully.');
                             } catch {
                               setRestoreStatus('Failed to restore key.');
@@ -175,7 +175,7 @@ function UserProfile() {
                       <button
                         onClick={() => {
                           try {
-                            restoreEncryptedKey(profile?.onChainAddress || account, uploadKeyText);
+                            restoreEncryptedKey(account, uploadKeyText);
                             setRestoreStatus('Key restored successfully.');
                           } catch {
                             setRestoreStatus('Failed to restore key.');
