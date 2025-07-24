@@ -3,7 +3,6 @@ import { ethers } from 'ethers';
 import { useMoralis } from 'react-moralis';
 import Docu3 from '../contracts/Docu3.json';
 import { downloadEncryptedKey, restoreEncryptedKey, getEncryptedPrivateKey } from '../utils/crypto';
-import EthCrypto from 'eth-crypto';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
 function UserProfile() {
@@ -26,7 +25,6 @@ function UserProfile() {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
         const [firstName, familyName, email, dob, , publicKey] = await contract.getUserProfile(account);
-        // Always use the on-chain address for key operations
         const onChainAddress = account;
         setProfile({ firstName, familyName, email, dob, publicKey, onChainAddress });
       } catch (err) {
@@ -56,6 +54,15 @@ function UserProfile() {
     fetchBalance();
   }, [account]);
 
+  async function getWalletAddress() {
+    if (window.ethereum) {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      return await signer.getAddress();
+    }
+    return account;
+  }
+
   if (loading) return <div className="text-center py-8">Loading profile...</div>;
 
   return (
@@ -75,7 +82,7 @@ function UserProfile() {
           <div><strong>Email:</strong> {profile.email}</div>
           <div><strong>Date of Birth:</strong> {profile.dob && new Date(Number(profile.dob) * 1000).toLocaleDateString()}</div>
           <div>
-            <strong>Public Key:</strong>
+            <strong>Public Key:</strong> 
             <span
               className="font-mono break-all cursor-pointer inline-block max-w-full align-middle"
               title={profile.publicKey}
@@ -135,7 +142,15 @@ function UserProfile() {
                     <div className="flex flex-col items-center space-y-4">
                       <p className="text-sm text-gray-700 text-center">Download your encrypted private key for backup. Keep it safe!</p>
                       <button
-                        onClick={() => downloadEncryptedKey(account)}
+                        onClick={async () => {
+                          const walletAddress = await getWalletAddress();
+                          const key = getEncryptedPrivateKey(walletAddress);
+                          if (!key) {
+                            alert('No encrypted key found for this wallet address. Please register or restore your key.');
+                          } else {
+                            downloadEncryptedKey(walletAddress);
+                          }
+                        }}
                         className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold"
                       >
                         Download Encrypted Key
@@ -148,14 +163,15 @@ function UserProfile() {
                       <input
                         type="file"
                         accept=".txt"
-                        onChange={e => {
+                        onChange={async e => {
                           const file = e.target.files[0];
                           if (!file) return;
                           const reader = new FileReader();
-                          reader.onload = function(ev) {
+                          reader.onload = async function(ev) {
                             const encryptedKey = ev.target.result;
                             try {
-                              restoreEncryptedKey(account, encryptedKey);
+                              const walletAddress = await getWalletAddress();
+                              restoreEncryptedKey(walletAddress, encryptedKey);
                               setRestoreStatus('Key restored successfully.');
                             } catch {
                               setRestoreStatus('Failed to restore key.');
@@ -173,9 +189,10 @@ function UserProfile() {
                         className="w-full border border-gray-300 rounded px-3 py-2 min-h-[60px]"
                       />
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           try {
-                            restoreEncryptedKey(account, uploadKeyText);
+                            const walletAddress = await getWalletAddress();
+                            restoreEncryptedKey(walletAddress, uploadKeyText);
                             setRestoreStatus('Key restored successfully.');
                           } catch {
                             setRestoreStatus('Failed to restore key.');
