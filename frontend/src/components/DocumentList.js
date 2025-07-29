@@ -95,7 +95,22 @@ function DocumentList() {
                   <td className="py-2 px-4 border-b max-w-[180px] truncate" title={doc.creator || ''}>
                     {doc.creator ? truncateMiddle(doc.creator, 10, 8) : <span className="text-gray-400 italic">N/A</span>}
                   </td>
-                  <td className="py-2 px-4 border-b">{doc.fullySigned ? 'Signed' : doc.isRevoked ? 'Revoked' : 'Pending'}</td>
+                  <td className="py-2 px-4 border-b">
+                    {doc.isRevoked ? (
+                      <span className="inline-block bg-red-600 text-white px-2 py-0.5 rounded-full text-xs font-bold" title="This document is revoked and cannot be changed.">Revoked</span>
+                    ) : doc._metadata && doc._metadata.previousVersion ? (
+                      <span className="inline-block bg-yellow-400 text-white px-2 py-0.5 rounded-full text-xs font-bold" title="This document is an amended version.">Amended</span>
+                    ) : doc.fullySigned ? (
+                      <span className="inline-block bg-green-600 text-white px-2 py-0.5 rounded-full text-xs font-bold">Signed</span>
+                    ) : (
+                      <span className="inline-block bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-bold">Pending</span>
+                    )}
+                    {doc._metadata && doc._metadata.previousVersion && (
+                      <span className="ml-2 text-xs text-blue-700 underline cursor-pointer" title="View previous version">
+                        <a href={`/documents/${doc._metadata.previousVersion}`}>Previous</a>
+                      </span>
+                    )}
+                  </td>
                   <td className="py-2 px-4 border-b">
                     <Link to={`/documents/${doc.docId}`} className="text-blue-600 underline">View / Sign</Link>
                   </td>

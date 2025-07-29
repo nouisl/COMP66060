@@ -463,6 +463,24 @@ function DocumentDetail() {
       
       {!loading && !error && doc && (
         <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-md p-8 mt-8">
+          {/* Revoked badge and info */}
+          {doc.isRevoked && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="inline-block bg-red-600 text-white px-4 py-1 rounded-full font-bold text-lg">Revoked</span>
+              <span className="text-xs text-red-700" title="Revoked documents cannot be signed, amended, or revoked again. The data remains on IPFS, but the document is locked on-chain.">
+                (This document is locked and cannot be changed. Data remains accessible on IPFS.)
+              </span>
+            </div>
+          )}
+          {/* Amended badge and previous version info */}
+          {metadata?.previousVersion && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="inline-block bg-yellow-400 text-white px-4 py-1 rounded-full font-bold text-lg">Amended Version</span>
+              <span className="text-xs text-yellow-800" title="This document is an amended version. Previous version is available.">
+                (This is an amended version. <a href={`/documents/${metadata.previousVersion}`} className="underline text-blue-700">View previous version</a>)
+              </span>
+            </div>
+          )}
           <h2 className="text-3xl font-bold mb-8 text-gray-900 text-center">Document Details</h2>
           <div className="grid md:grid-cols-2 gap-8 mb-8">
             <div>
@@ -551,26 +569,32 @@ function DocumentDetail() {
           {success && <div className="mt-4 p-4 bg-green-50 text-green-700 rounded text-center">{success}</div>}
 
           <div className="mt-8 flex flex-wrap gap-4 justify-center">
+            {/* Sign button */}
             {!hasSigned && isCurrentSigner && !doc.isRevoked && (
               <button
                 onClick={handleSign}
-                disabled={signing || (metadata?.file?.encrypted && !decryptedFileUrl)}
+                disabled={signing || (metadata?.file?.encrypted && !decryptedFileUrl) || doc.isRevoked}
+                title={doc.isRevoked ? 'This document is revoked and cannot be signed.' : ''}
                 className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
               >
                 {signing ? 'Signing...' : 'Sign Document'}
               </button>
             )}
+            {/* Amend/Revoke buttons for creator */}
             {doc.creator === account && !doc.isRevoked && (
               <>
                 <button
                   onClick={() => setShowAmendForm(!showAmendForm)}
-                  className="px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+                  disabled={doc.isRevoked}
+                  title={doc.isRevoked ? 'This document is revoked and cannot be amended.' : ''}
+                  className="px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:bg-gray-400"
                 >
                   Amend Document
                 </button>
                 <button
                   onClick={handleRevoke}
-                  disabled={revoking}
+                  disabled={revoking || doc.isRevoked}
+                  title={doc.isRevoked ? 'This document is already revoked.' : ''}
                   className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-400"
                 >
                   {revoking ? 'Revoking...' : 'Revoke Document'}
