@@ -37,5 +37,11 @@ module.exports = {
   ],
   transformIgnorePatterns: [
     '/node_modules/(?!(@web3uikit|eth-crypto|crypto-js)/)'
-  ]
+  ],
+  extensionsToTreatAsEsm: ['.js', '.jsx'],
+  globals: {
+    'ts-jest': {
+      useESM: true
+    }
+  }
 }; 
