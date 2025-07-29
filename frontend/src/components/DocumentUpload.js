@@ -17,6 +17,8 @@ function DocumentUpload() {
   const [registeredUsers, setRegisteredUsers] = useState([]);
   const [expiry, setExpiry] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [includeSelfAsSigner, setIncludeSelfAsSigner] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
   const fileInputRef = useRef();
   const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
   const dispatch = useNotification();
@@ -42,7 +44,24 @@ function DocumentUpload() {
         setRegisteredUsers(users);
       } catch (err) {}
     }
+
+    async function fetchUserProfile() {
+      if (!window.ethereum) return;
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const userAddress = await signer.getAddress();
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
+        const profile = await contract.getUserProfile(userAddress);
+        const [firstName, familyName, email, , isRegistered] = profile;
+        if (isRegistered) {
+          setUserProfile({ address: userAddress, firstName, familyName, email: email.trim() });
+        }
+      } catch (err) {}
+    }
+
     fetchRegisteredUsers();
+    fetchUserProfile();
   }, [CONTRACT_ADDRESS]);
 
   const handleSubmit = async (e) => {
@@ -79,7 +98,7 @@ function DocumentUpload() {
       }
       const filePath = 'document.' + fileExt;
       const validSignerAddresses = signers.map(s => s.address).filter(addr => addr);
-      const allRecipients = [uploaderAddress, ...validSignerAddresses];
+      const allRecipients = includeSelfAsSigner ? [uploaderAddress, ...validSignerAddresses] : validSignerAddresses;
       const getPublicKey = async (address) => {
         const profile = await contract.getUserProfile(address);
         return profile[5];
@@ -123,14 +142,13 @@ function DocumentUpload() {
         throw new Error(`Failed to upload encrypted file to IPFS: ${uploadError.message}`);
       }
       const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
-      const validSigners = signers
-        .map(s => s.address)
-        .filter(addr => addr && addr.toLowerCase() !== uploaderAddress.toLowerCase());
+      const validSigners = getValidSigners();
+      
       if (expiryTimestamp > 0 && expiryTimestamp <= Math.floor(Date.now() / 1000)) {
         throw new Error('Expiry date must be in the future.');
       }
       if (validSigners.length === 0) {
-        throw new Error('No valid signers found. At least one signer is required and cannot be the document creator.');
+        throw new Error('No valid signers found. At least one signer is required.');
       }
       for (let i = 0; i < validSigners.length; i++) {
         if (!validSigners[i] || validSigners[i] === '0x0000000000000000000000000000000000000000') {
@@ -224,8 +242,6 @@ function DocumentUpload() {
           errorMessage = 'No valid signers found. At least one signer is required.';
         } else if (err.message && err.message.includes('Invalid signer address')) {
           errorMessage = 'One or more signer addresses are invalid.';
-        } else if (err.message && err.message.includes('Owner cannot be signer')) {
-          errorMessage = 'Document creator cannot be a signer.';
         } else if (err.message && err.message.includes('Expiry must be in the future')) {
           errorMessage = 'Expiry date must be in the future.';
         } else if (err.message && err.message.includes('revert')) {
@@ -269,8 +285,17 @@ function DocumentUpload() {
     const updated = [...signers];
     const normalizedEmail = email.trim().toLowerCase();
     const user = registeredUsers.find(u => u.email === normalizedEmail);
+    
     if (user) {
-      updated[idx] = { email, error: '', address: user.address };
+      // Check if this user is already included (either via checkbox or other signers)
+      const isDuplicate = (includeSelfAsSigner && userProfile && user.address.toLowerCase() === userProfile.address.toLowerCase()) ||
+                         updated.some((s, i) => i !== idx && s.address && s.address.toLowerCase() === user.address.toLowerCase());
+      
+      if (isDuplicate) {
+        updated[idx] = { email, error: 'This user is already included as a signer', address: '' };
+      } else {
+        updated[idx] = { email, error: '', address: user.address };
+      }
     } else {
       updated[idx] = { email, error: 'No registered user with this email', address: '' };
     }
@@ -284,11 +309,24 @@ function DocumentUpload() {
   const removeSigner = (idx) => {
     setSigners(signers.filter((_, i) => i !== idx));
   };
-  const isFormValid = () => {
-    if (!selectedFile || !title.trim() || signers.length === 0) return false;
-    for (let s of signers) {
-      if (!s.email.trim() || s.error || !s.address) return false;
+  const getValidSigners = () => {
+    const validSigners = signers.filter(s => s.email.trim() && !s.error && s.address);
+    if (includeSelfAsSigner && userProfile) {
+      // Remove duplicates if uploader is already in the signers list
+      const uploaderAddress = userProfile.address.toLowerCase();
+      const filteredSigners = validSigners.filter(s => s.address.toLowerCase() !== uploaderAddress);
+      return [userProfile.address, ...filteredSigners];
     }
+    return validSigners.map(s => s.address);
+  };
+
+  const isFormValid = () => {
+    if (!selectedFile || !title.trim()) return false;
+    
+    const validSigners = getValidSigners();
+    if (validSigners.length === 0) return false;
+    if (includeSelfAsSigner && !userProfile) return false;
+    
     return true;
   };
 
@@ -333,9 +371,58 @@ function DocumentUpload() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Signers (enter registered user email) *</label>
+            
+            <div className="mb-3">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={includeSelfAsSigner}
+                  onChange={(e) => setIncludeSelfAsSigner(e.target.checked)}
+                  className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-700">Include myself as a signer</span>
+              </label>
+              {includeSelfAsSigner && userProfile && (
+                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                  <strong>Note:</strong> You will be the first signer. Remove your email from the signer list below to avoid duplicates.
+                </div>
+              )}
+            </div>
+            
             <div className="space-y-2">
+              {includeSelfAsSigner && userProfile && (
+                <div className="flex flex-row gap-2 items-center">
+                  <div className="flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-600 text-xs font-bold rounded-full">1</div>
+                  <input
+                    type="email"
+                    value={userProfile.email}
+                    disabled
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 font-mono text-xs"
+                    placeholder="You will be the first signer"
+                  />
+                  <span className="text-xs text-gray-500">(You)</span>
+                </div>
+              )}
+              
+              {includeSelfAsSigner && !userProfile && (
+                <div className="flex flex-row gap-2 items-center">
+                  <div className="flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-600 text-xs font-bold rounded-full">1</div>
+                  <input
+                    type="email"
+                    value="Please register first"
+                    disabled
+                    className="flex-1 px-3 py-2 border border-red-300 rounded-lg bg-red-50 text-red-500 font-mono text-xs"
+                    placeholder="You need to register first"
+                  />
+                  <span className="text-xs text-red-500">(Not registered)</span>
+                </div>
+              )}
+              
               {signers.map((signer, idx) => (
                 <div key={idx} className="flex flex-row gap-2 items-center">
+                  <div className="flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-600 text-xs font-bold rounded-full">
+                    {includeSelfAsSigner ? idx + 2 : idx + 1}
+                  </div>
                   <input
                     type="email"
                     value={signer.email}
@@ -348,6 +435,9 @@ function DocumentUpload() {
                     <button type="button" onClick={() => removeSigner(idx)} className="text-red-500 hover:text-red-700 text-xs">Remove</button>
                   )}
                   {signer.error && <span className="text-red-500 text-xs ml-2">{signer.error}</span>}
+                  {!signer.error && signer.address && (
+                    <span className="text-xs text-green-600 ml-2">✓ Valid</span>
+                  )}
                 </div>
               ))}
               <button type="button" onClick={addSigner} className="text-blue-600 hover:text-blue-800 text-xs mt-1">+ Add Signer</button>

@@ -95,7 +95,6 @@ contract DocumentSign {
         doc.roles[msg.sender] = Role.Owner;
         for (uint i = 0; i < _signers.length; i++) {
             require(_signers[i] != address(0), "Invalid signer address");
-            require(_signers[i] != msg.sender, "Owner cannot be signer");
             doc.signers.push(_signers[i]);
             doc.roles[_signers[i]] = Role.Signer;
         }
