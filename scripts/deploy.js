@@ -10,7 +10,7 @@ async function main() {
   await documentSign.waitForDeployment();
 
   const address = await documentSign.getAddress();
-  console.log("DocumentSign deployed to:", address);
+  console.log("Docu³ deployed to:", address);
 
   console.log("Contract deployed successfully!");
   console.log("Please update your frontend environment variables:");

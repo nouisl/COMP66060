@@ -17,14 +17,59 @@ describe("Docu3 with Pinata IPFS integration", function () {
   });
 
   it("uploads a file to IPFS via Pinata and stores the hash on-chain", async function () {
-    // uploading a file (buffer or string)
     const result = await pinata.pinJSONToIPFS({ message: "Hi, decentralized world!" });
     const ipfsHash = result.IpfsHash;
-    // storing the hash on-chain
-    const tx = await documentSign.createDocument(ipfsHash, [signer1.address]);
-    await tx.wait();
-    // get hash and check
-    const doc = await documentSign.getDocument(1);
+    
+    const tx = await documentSign.createDocument(ipfsHash, [signer1.address], 0);
+    const receipt = await tx.wait();
+    const event = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated");
+    const docId = event.args.docId;
+    
+    const doc = await documentSign.getDocument(docId);
     expect(doc.ipfsHash).to.equal(ipfsHash);
+  });
+
+  it("creates document with IPFS hash and allows signing", async function () {
+    const testData = { 
+      title: "Test Document", 
+      content: "This is a test document for IPFS integration",
+      timestamp: Date.now()
+    };
+    
+    const result = await pinata.pinJSONToIPFS(testData);
+    const ipfsHash = result.IpfsHash;
+    
+    const tx = await documentSign.createDocument(ipfsHash, [signer1.address], 0);
+    const receipt = await tx.wait();
+    const event = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated");
+    const docId = event.args.docId;
+    
+    const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
+    
+    await documentSign.connect(signer1).signDocument(docId, testSignature);
+    
+    const doc = await documentSign.getDocument(docId);
+    expect(doc.signatureCount).to.equal(1);
+    expect(doc.fullySigned).to.be.true;
+  });
+
+  it("handles document amendment with new IPFS hash", async function () {
+    const initialData = { content: "Initial document content" };
+    const result1 = await pinata.pinJSONToIPFS(initialData);
+    const initialHash = result1.IpfsHash;
+    
+    const tx = await documentSign.createDocument(initialHash, [signer1.address], 0);
+    const receipt = await tx.wait();
+    const event = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated");
+    const docId = event.args.docId;
+    
+    const updatedData = { content: "Updated document content" };
+    const result2 = await pinata.pinJSONToIPFS(updatedData);
+    const updatedHash = result2.IpfsHash;
+    
+    await documentSign.amendDocument(docId, updatedHash, 0);
+    
+    const doc = await documentSign.getDocument(docId);
+    expect(doc.ipfsHash).to.equal(updatedHash);
   });
 }); 

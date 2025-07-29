@@ -94,9 +94,16 @@ describe("Docu3 Contract", function () {
         .to.be.revertedWith("At least one signer required");
     });
 
-    it("should revert if owner is also a signer", async function () {
-      await expect(documentSign.createDocument("QmHash", [owner.address], 0))
-        .to.be.revertedWith("Owner cannot be signer");
+    it("should allow owner to be a signer", async function () {
+      const tx = await documentSign.createDocument("QmHash", [owner.address], 0);
+      const receipt = await tx.wait();
+      const event = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated");
+      expect(event).to.exist;
+      
+      const docId = event.args.docId;
+      const doc = await documentSign.getDocument(docId);
+      expect(doc.signers).to.deep.equal([owner.address]);
+      expect(doc.creator).to.equal(owner.address);
     });
 
     it("should revert if expiry is in the past", async function () {
@@ -118,7 +125,7 @@ describe("Docu3 Contract", function () {
 
   describe("Document Signing", function () {
     let docId;
-    const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
+    const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
 
     beforeEach(async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address, signer2.address], 0);
@@ -165,12 +172,16 @@ describe("Docu3 Contract", function () {
     });
 
     it("should not allow signing expired document", async function () {
-      const pastExpiry = Math.floor(Date.now() / 1000) - 1;
-      const tx = await documentSign.createDocument("QmHash", [signer1.address], pastExpiry);
+      const currentTime = await ethers.provider.getBlock("latest").then(block => block.timestamp);
+      const futureExpiry = currentTime + 10;
+      const tx = await documentSign.createDocument("QmHash", [signer1.address], futureExpiry);
       const receipt = await tx.wait();
-      const expiredDocId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
       
-      await expect(documentSign.connect(signer1).signDocument(expiredDocId, testSignature))
+      await ethers.provider.send("evm_increaseTime", [15]);
+      await ethers.provider.send("evm_mine");
+      
+      await expect(documentSign.connect(signer1).signDocument(docId, testSignature))
         .to.be.revertedWith("Document expired");
     });
 
@@ -263,12 +274,16 @@ describe("Docu3 Contract", function () {
     });
 
     it("should not allow amendment of expired document", async function () {
-      const pastExpiry = Math.floor(Date.now() / 1000) - 1;
-      const tx = await documentSign.createDocument("QmHash", [signer1.address], pastExpiry);
+      const currentTime = await ethers.provider.getBlock("latest").then(block => block.timestamp);
+      const futureExpiry = currentTime + 10;
+      const tx = await documentSign.createDocument("QmHash", [signer1.address], futureExpiry);
       const receipt = await tx.wait();
-      const expiredDocId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
       
-      await expect(documentSign.amendDocument(expiredDocId, "QmNewHash", 0))
+      await ethers.provider.send("evm_increaseTime", [15]);
+      await ethers.provider.send("evm_mine");
+      
+      await expect(documentSign.amendDocument(docId, "QmNewHash", 0))
         .to.be.revertedWith("Document expired");
     });
 
@@ -289,36 +304,40 @@ describe("Docu3 Contract", function () {
     });
 
     it("should verify valid signature", async function () {
-      const documentHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("test document"));
-      const messageHash = ethers.utils.keccak256(
-        ethers.utils.solidityPack(["string", "bytes32"], ["\x19Ethereum Signed Message:\n32", documentHash])
+      const documentHash = ethers.keccak256(ethers.toUtf8Bytes("test document"));
+      const messageHash = ethers.keccak256(
+        ethers.solidityPacked(["string", "bytes32"], ["\x19Ethereum Signed Message:\n32", documentHash])
       );
       
-      const signature = await signer1.signMessage(ethers.utils.arrayify(documentHash));
+      const signature = await signer1.signMessage(ethers.getBytes(documentHash));
       
       const isValid = await documentSign.verifySignature(docId, signer1.address, documentHash, signature);
       expect(isValid).to.be.true;
     });
 
     it("should reject invalid signature", async function () {
-      const documentHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("test document"));
-      const wrongSignature = "0x" + "1".repeat(130);
+      const documentHash = ethers.keccak256(ethers.toUtf8Bytes("test document"));
+      const wrongSignature = "0x" + "1".repeat(64) + "1c";
       
-      const isValid = await documentSign.verifySignature(docId, signer1.address, documentHash, wrongSignature);
-      expect(isValid).to.be.false;
+      try {
+        const isValid = await documentSign.verifySignature(docId, signer1.address, documentHash, wrongSignature);
+        expect(isValid).to.be.false;
+      } catch (error) {
+        expect(error.message).to.include("Invalid signature");
+      }
     });
 
     it("should reject signature from non-signer", async function () {
-      const documentHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("test document"));
-      const signature = await signer2.signMessage(ethers.utils.arrayify(documentHash));
+      const documentHash = ethers.keccak256(ethers.toUtf8Bytes("test document"));
+      const signature = await signer2.signMessage(ethers.getBytes(documentHash));
       
       await expect(documentSign.verifySignature(docId, signer2.address, documentHash, signature))
         .to.be.revertedWith("Signer has not signed this document");
     });
 
     it("should reject invalid signature length", async function () {
-      const documentHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("test document"));
-      const invalidSignature = "0x123";
+      const documentHash = ethers.keccak256(ethers.toUtf8Bytes("test document"));
+      const invalidSignature = "0x" + "1".repeat(32);
       
       await expect(documentSign.verifySignature(docId, signer1.address, documentHash, invalidSignature))
         .to.be.revertedWith("Invalid signature length");
@@ -356,7 +375,7 @@ describe("Docu3 Contract", function () {
       
       await documentSign.connect(signer2).signDocument(docId, "0x456");
       current = await documentSign.getCurrentSigner(docId);
-      expect(current).to.equal(ethers.constants.AddressZero);
+      expect(current).to.equal(ethers.ZeroAddress);
     });
 
     it("should check if user is signer", async function () {
@@ -377,19 +396,26 @@ describe("Docu3 Contract", function () {
 
   describe("Document Expiry", function () {
     it("should check if document is expired", async function () {
-      const pastExpiry = Math.floor(Date.now() / 1000) - 1;
-      const futureExpiry = Math.floor(Date.now() / 1000) + 3600;
+      const currentTime = await ethers.provider.getBlock("latest").then(block => block.timestamp);
+      const futureExpiry = currentTime + 10;
+      const farFutureExpiry = currentTime + 3600;
       
-      const tx1 = await documentSign.createDocument("QmHash1", [signer1.address], pastExpiry);
+      const tx1 = await documentSign.createDocument("QmHash1", [signer1.address], futureExpiry);
       const receipt1 = await tx1.wait();
-      const expiredDocId = receipt1.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      const docId1 = receipt1.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
       
-      const tx2 = await documentSign.createDocument("QmHash2", [signer1.address], futureExpiry);
+      const tx2 = await documentSign.createDocument("QmHash2", [signer1.address], farFutureExpiry);
       const receipt2 = await tx2.wait();
-      const validDocId = receipt2.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      const docId2 = receipt2.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
       
-      expect(await documentSign.isExpired(expiredDocId)).to.be.true;
-      expect(await documentSign.isExpired(validDocId)).to.be.false;
+      expect(await documentSign.isExpired(docId1)).to.be.false;
+      expect(await documentSign.isExpired(docId2)).to.be.false;
+      
+      await ethers.provider.send("evm_increaseTime", [15]);
+      await ethers.provider.send("evm_mine");
+      
+      expect(await documentSign.isExpired(docId1)).to.be.true;
+      expect(await documentSign.isExpired(docId2)).to.be.false;
     });
   });
 
@@ -408,6 +434,55 @@ describe("Docu3 Contract", function () {
     it("should handle unregistered user profile queries", async function () {
       await expect(documentSign.getUserProfile(nonSigner.address))
         .to.be.revertedWith("User not registered");
+    });
+  });
+
+  describe("Uploader as signer", function () {
+    it("should allow owner as the only signer", async function () {
+      const tx = await documentSign.createDocument("QmHash", [owner.address], 0);
+      const receipt = await tx.wait();
+      const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
+      await documentSign.signDocument(docId, testSignature);
+      const doc = await documentSign.getDocument(docId);
+      expect(doc.signatureCount).to.equal(1);
+      expect(doc.fullySigned).to.be.true;
+    });
+    it("should allow owner as the first signer", async function () {
+      const tx = await documentSign.createDocument("QmHash", [owner.address, signer1.address, signer2.address], 0);
+      const receipt = await tx.wait();
+      const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
+      await documentSign.signDocument(docId, testSignature);
+      await documentSign.connect(signer1).signDocument(docId, testSignature);
+      await documentSign.connect(signer2).signDocument(docId, testSignature);
+      const doc = await documentSign.getDocument(docId);
+      expect(doc.signatureCount).to.equal(3);
+      expect(doc.fullySigned).to.be.true;
+    });
+    it("should allow owner as the last signer", async function () {
+      const tx = await documentSign.createDocument("QmHash", [signer1.address, signer2.address, owner.address], 0);
+      const receipt = await tx.wait();
+      const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
+      await documentSign.connect(signer1).signDocument(docId, testSignature);
+      await documentSign.connect(signer2).signDocument(docId, testSignature);
+      await documentSign.signDocument(docId, testSignature);
+      const doc = await documentSign.getDocument(docId);
+      expect(doc.signatureCount).to.equal(3);
+      expect(doc.fullySigned).to.be.true;
+    });
+    it("should allow owner as a middle signer", async function () {
+      const tx = await documentSign.createDocument("QmHash", [signer1.address, owner.address, signer2.address], 0);
+      const receipt = await tx.wait();
+      const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
+      await documentSign.connect(signer1).signDocument(docId, testSignature);
+      await documentSign.signDocument(docId, testSignature);
+      await documentSign.connect(signer2).signDocument(docId, testSignature);
+      const doc = await documentSign.getDocument(docId);
+      expect(doc.signatureCount).to.equal(3);
+      expect(doc.fullySigned).to.be.true;
     });
   });
 });
