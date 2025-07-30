@@ -49,6 +49,9 @@ export async function encryptDocument(fileBuffer, uploader, signerAddresses, get
 
 export async function decryptDocument(encryptedFile, encryptedKeys, userAddress, passphrase, iv) {
   const encryptedSymmetricKey = encryptedKeys[userAddress];
+  if (!encryptedSymmetricKey) {
+    throw new Error('No encrypted key found for user');
+  }
   const cipher = EthCrypto.cipher.parse(encryptedSymmetricKey);
   const privateKey = await getDecryptedPrivateKey(userAddress, passphrase);
   const cleanPrivateKey = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey;
