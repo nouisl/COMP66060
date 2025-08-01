@@ -1,19 +1,24 @@
+// imports
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMoralis } from 'react-moralis';
 import { documentService } from '../utils/documentService';
 
+// Dashboard component
 function Dashboard() {
   const { account } = useMoralis();
+  // define state for dashboard stats
   const [stats, setStats] = useState({
     totalDocuments: 0,
     pendingSignatures: 0,
     signedDocuments: 0,
     createdDocuments: 0
   });
+  // define loading and refreshing states
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // get user info from the blockchain
   const fetchStats = async () => {
     if (!account) return;
     try {
@@ -27,6 +32,7 @@ function Dashboard() {
     }
   };
 
+  // load user info when component mounts or account changes
   useEffect(() => {
     let isMounted = true;
     
@@ -52,13 +58,16 @@ function Dashboard() {
     };
   }, [account]);
 
+  // refresh user info when button is clicked
   const handleRefresh = async () => {
     setRefreshing(true);
     await fetchStats();
   };
 
+  // show loading state when getting data
   if (loading) return <div className="text-center py-8">Loading dashboard...</div>;
 
+  // return dashboard with stats and quick actions
   return (
     <div className="max-w-6xl mx-auto px-4">
       <div className="flex justify-between items-center mb-8">
@@ -71,6 +80,7 @@ function Dashboard() {
           <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
         </button>
       </div>
+      {/* display stats cards */}
       <div className="grid md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-lg font-semibold text-gray-700 mb-2">Total Documents</h3>
@@ -90,7 +100,7 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* quick actions and recent activity section */}
       <div className="grid md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h3>
@@ -113,6 +123,7 @@ function Dashboard() {
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h3>
           <div className="text-gray-600">
+            {/* show pending signatures message if any exist */}
             {stats.pendingSignatures > 0 ? (
               <p className="text-yellow-600 font-medium">
                 You have {stats.pendingSignatures} document(s) waiting for your signature
@@ -127,4 +138,5 @@ function Dashboard() {
   );
 }
 
+// export the Dashboard component
 export default Dashboard;
