@@ -1,41 +1,48 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
+// DocumentSign contract for managing document signing and user registration
 contract DocumentSign {
+    // define user roles in the system
     enum Role { Unregistered, Owner, Signer }
 
+    // structure to store document information
     struct Document {
-        string ipfsHash;
-        address creator;
-        address[] signers;
-        mapping(address => Role) roles; 
-        mapping(address => bool) hasSigned;
-        mapping(address => uint256) signedAt;
-        mapping(address => string) signatures;
-        uint256 createdAt;
-        uint256 signatureCount;
-        bool isRevoked;
-        bool exists;
-        uint256 expiry;
-        uint256 currentSignerIndex;
+        string ipfsHash; // IPFS hash of the document
+        address creator; // address of document creator
+        address[] signers; // array of signer addresses
+        mapping(address => Role) roles; // mapping of user roles
+        mapping(address => bool) hasSigned; // track if user has signed
+        mapping(address => uint256) signedAt; // timestamp when user signed
+        mapping(address => string) signatures; // store user signatures
+        uint256 createdAt; // document creation timestamp
+        uint256 signatureCount; // count of signatures received
+        bool isRevoked; // document revocation status
+        bool exists; // document existence flag
+        uint256 expiry; // document expiry timestamp
+        uint256 currentSignerIndex; // current signer in sequence
     }
 
+    // mapping to store documents by ID
     mapping(uint256 => Document) private documents;
-    uint256 public documentCount;
+    uint256 public documentCount; // total number of documents
 
+    // structure to store user profile information
     struct UserProfile {
         string firstName;
         string familyName;
         string email;
-        uint256 dob; // store as Unix timestamp
+        uint256 dob; 
         bool isRegistered;
         string publicKey;
     }
 
+    // mapping to store user profiles by address
     mapping(address => UserProfile) public profiles;
-    address[] public registeredUsers;
-    mapping(string => address) public emailToAddress;
+    address[] public registeredUsers; // array of registered user addresses
+    mapping(string => address) public emailToAddress; // email to address mapping
 
+    // events for document 
     event DocumentCreated(
         uint256 indexed docId,
         string ipfsHash,
@@ -64,23 +71,27 @@ contract DocumentSign {
     event DocumentExpired(uint256 indexed docId, uint256 expiredAt);
     event UserRegistered(address indexed user, string firstName, string familyName, string email, uint256 dob, string publicKey);
 
+    // check if user is a signer
     modifier onlySigner(uint256 docId) {
         require(documents[docId].exists, "Document does not exist");
         require(documents[docId].roles[msg.sender] == Role.Signer, "Not authorized signer");
         _;
     }
 
+    // check if user is document owner
     modifier onlyOwner(uint256 docId) {
         require(documents[docId].exists, "Document does not exist");
         require(documents[docId].roles[msg.sender] == Role.Owner, "Not document owner");
         _;
     }
 
+    // check if document is not revoked
     modifier notRevoked(uint256 docId) {
         require(!documents[docId].isRevoked, "Document is revoked");
         _;
     }
 
+    // create new document with signers and expiry
     function createDocument(string memory _ipfsHash, address[] memory _signers, uint256 _expiry) external returns (uint256) {
         require(bytes(_ipfsHash).length > 0, "IPFS hash required");
         require(_signers.length > 0, "At least one signer required");
@@ -102,11 +113,13 @@ contract DocumentSign {
         return documentCount;
     }
 
+    // check if document has expired
     function isExpired(uint256 _docId) public view returns (bool) {
         Document storage doc = documents[_docId];
         return doc.expiry != 0 && block.timestamp > doc.expiry;
     }
 
+    // sign document with cryptographic signature
     function signDocument(uint256 _docId, string memory _signature) external onlySigner(_docId) notRevoked(_docId) {
         Document storage doc = documents[_docId];
         require(!isExpired(_docId), "Document expired");
@@ -122,6 +135,7 @@ contract DocumentSign {
         emit DocumentSigned(_docId, msg.sender, block.timestamp, _signature);
     }
 
+    // legacy signing function without cryptographic signature
     function signDocumentLegacy(uint256 _docId) external onlySigner(_docId) notRevoked(_docId) {
         Document storage doc = documents[_docId];
         require(!isExpired(_docId), "Document expired");
@@ -135,24 +149,29 @@ contract DocumentSign {
         emit DocumentSigned(_docId, msg.sender, block.timestamp, "");
     }
 
+    // revoke document by owner
     function revokeDocument(uint256 _docId, string memory _reason) external onlyOwner(_docId) notRevoked(_docId) {
         Document storage doc = documents[_docId];
         doc.isRevoked = true;
         emit DocumentRevoked(_docId, msg.sender, block.timestamp, _reason);
     }
 
+    // check if user has signed a document
     function hasSigned(uint256 _docId, address _signer) external view returns (bool) {
         return documents[_docId].hasSigned[_signer];
     }
 
+    // get timestamp when user signed
     function getSignTimestamp(uint256 _docId, address _signer) external view returns (uint256) {
         return documents[_docId].signedAt[_signer];
     }
 
+    // get user's signature for a document
     function getSignature(uint256 _docId, address _signer) external view returns (string memory) {
         return documents[_docId].signatures[_signer];
     }
 
+    // get full document info
     function getDocument(uint256 _docId) external view returns (
         string memory ipfsHash,
         address creator,
@@ -182,15 +201,17 @@ contract DocumentSign {
         );
     }
 
+    // get user's role for a document
     function getRole(uint256 _docId, address _user) external view returns (Role) {
         require(documents[_docId].exists, "Document does not exist");
         return documents[_docId].roles[_user];
     }
 
+    // amend document by owner, if not fully signed yet
     function amendDocument(uint256 _docId, string memory _newIpfsHash, uint256 _newExpiry) external onlyOwner(_docId) notRevoked(_docId) {
         Document storage doc = documents[_docId];
         require(!isExpired(_docId), "Document expired");
-        // Check not fully signed
+        // check if not fully signed
         bool allSigned = true;
         for (uint i = 0; i < doc.signers.length; i++) {
             if (!doc.hasSigned[doc.signers[i]]) {
@@ -208,16 +229,18 @@ contract DocumentSign {
         emit DocumentAmended(_docId, _newIpfsHash, msg.sender, block.timestamp);
     }
 
+    // get current signer in sequence
     function getCurrentSigner(uint256 _docId) external view returns (address) {
         Document storage doc = documents[_docId];
         require(doc.exists, "Document does not exist");
         if (doc.currentSignerIndex < doc.signers.length) {
             return doc.signers[doc.currentSignerIndex];
         } else {
-            return address(0); // All signed
+            return address(0); // all signed
         }
     }
 
+    // verify cryptographic signature
     function verifySignature(
         uint256 _docId, 
         address _signer, 
@@ -248,6 +271,7 @@ contract DocumentSign {
         return recoveredSigner == _signer;
     }
 
+    // register new user
     function registerUser(
         string memory firstName,
         string memory familyName,
@@ -263,6 +287,7 @@ contract DocumentSign {
         emit UserRegistered(msg.sender, firstName, familyName, email, dob, publicKey);
     }
 
+    // get user profile info
     function getUserProfile(address user) public view returns (
         string memory firstName,
         string memory familyName,
@@ -276,10 +301,12 @@ contract DocumentSign {
         return (p.firstName, p.familyName, p.email, p.dob, p.isRegistered, p.publicKey);
     }
 
+    // get all registered users
     function getAllRegisteredUsers() public view returns (address[] memory) {
         return registeredUsers;
     }
 
+    // check if user is a signer for document
     function isSigner(address _user, uint256 _docId) external view returns (bool) {
         Document storage doc = documents[_docId];
         if (!doc.exists) return false;
