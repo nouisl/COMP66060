@@ -1,3 +1,4 @@
+// imports
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Home from './components/Home';
 import UserRegistration from './components/UserRegistration';
@@ -16,6 +17,7 @@ import Dashboard from './components/Dashboard';
 import PrivateRoute from './components/PrivateRoute';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
+// check if user is registered on blockchain
 async function checkUserRegistered(account) {
   if (!window.ethereum || !account) return false;
   const provider = new ethers.BrowserProvider(window.ethereum);
@@ -28,11 +30,13 @@ async function checkUserRegistered(account) {
   }
 }
 
+// PublicOnlyRoute component for unregistered users
 function PublicOnlyRoute({ children }) {
   const { account } = useMoralis();
   const [profileChecked, setProfileChecked] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
 
+  // check user registration status
   useEffect(() => {
     const checkProfile = async () => {
       if (account) {
@@ -51,11 +55,13 @@ function PublicOnlyRoute({ children }) {
   return children;
 }
 
+// App component
 function App() {
   const { account } = useMoralis();
   const [profileChecked, setProfileChecked] = useState(false);
   const navigate = useNavigate();
 
+  // check profile and redirect if needed
   useEffect(() => {
     const checkProfile = async () => {
       if (account) {
@@ -71,6 +77,7 @@ function App() {
 
   if (!profileChecked) return null;
 
+  // return app with routing
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
@@ -91,4 +98,5 @@ function App() {
   );
 }
 
+// export the App component
 export default App;
