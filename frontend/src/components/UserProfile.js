@@ -1,3 +1,4 @@
+// imports
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useMoralis } from 'react-moralis';
@@ -5,8 +6,10 @@ import Docu3 from '../contracts/Docu3.json';
 import { downloadEncryptedKey, restoreEncryptedKey, getEncryptedPrivateKey } from '../utils/crypto';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
+// UserProfile component
 function UserProfile() {
   const { account } = useMoralis();
+  // define state for profile data
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showKeyModal, setShowKeyModal] = useState(false);
@@ -18,6 +21,7 @@ function UserProfile() {
   const [balance, setBalance] = useState(null);
   const [walletConnected, setWalletConnected] = useState(!!window.ethereum);
 
+  // get user profile from blockchain
   useEffect(() => {
     async function fetchProfile() {
       if (!account) return;
@@ -35,6 +39,7 @@ function UserProfile() {
     fetchProfile();
   }, [account]);
 
+  // get wallet balance
   useEffect(() => {
     async function fetchBalance() {
       if (!window.ethereum || !account) {
@@ -54,6 +59,7 @@ function UserProfile() {
     fetchBalance();
   }, [account]);
 
+  // get wallet address
   async function getWalletAddress() {
     if (window.ethereum) {
       const provider = new ethers.BrowserProvider(window.ethereum);
@@ -63,13 +69,16 @@ function UserProfile() {
     return account;
   }
 
+  // show loading when getting data
   if (loading) return <div className="text-center py-8">Loading profile...</div>;
 
+  // return profile page
   return (
     <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8 mt-4">
       <h2 className="text-2xl font-bold mb-6 text-gray-900">User Profile</h2>
       {profile ? (
         <div className="space-y-4">
+          {/* show wallet balance if connected */}
           {walletConnected && balance !== null && (
             <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
@@ -77,6 +86,7 @@ function UserProfile() {
               </p>
             </div>
           )}
+          {/* show user profile info */}
           <div><strong>First Name:</strong> {profile.firstName}</div>
           <div><strong>Family Name:</strong> {profile.familyName}</div>
           <div><strong>Email:</strong> {profile.email}</div>
@@ -94,6 +104,7 @@ function UserProfile() {
             </span>
           </div>
 
+          {/* show manage key and user buttons */}
           <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-4">
             <div className="flex flex-wrap gap-4 items-center">
               <button
@@ -238,4 +249,5 @@ function UserProfile() {
   );
 }
 
+// export the UserProfile component
 export default UserProfile;
