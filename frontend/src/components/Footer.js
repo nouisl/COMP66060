@@ -1,6 +1,9 @@
+// imports
 import { Link } from 'react-router-dom';
 
+// Footer component
 function Footer() {
+  // return footer
   return (
     <footer className="bg-white border-t">
       <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
@@ -87,4 +90,5 @@ function Footer() {
   );
 };
 
+// export the Footer component
 export default Footer; 
