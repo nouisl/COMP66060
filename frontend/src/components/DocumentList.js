@@ -1,19 +1,24 @@
+// imports
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMoralis } from 'react-moralis';
 import { documentService } from '../utils/documentService';
 
+// shorten long strings for display
 function truncateMiddle(str, frontLen = 8, backLen = 6) {
   if (!str || str.length <= frontLen + backLen + 3) return str;
   return str.slice(0, frontLen) + '...' + str.slice(-backLen);
 }
 
+// DocumentList component
 function DocumentList() {
   const { account } = useMoralis();
+  // define state for documents and loading
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // get metadata from IPFS
   async function fetchMetadata(ipfsHash) {
     const urls = [
       `https://ipfs.io/ipfs/${ipfsHash}/metadata.json`
@@ -27,6 +32,7 @@ function DocumentList() {
     return null;
   }
 
+  // get documents from the blockchain
   useEffect(() => {
     async function fetchDocuments() {
       setLoading(true);
@@ -56,9 +62,12 @@ function DocumentList() {
     if (account) fetchDocuments();
   }, [account]);
 
+  // show loading when getting data
   if (loading) return <div className="text-center py-8">Loading documents...</div>;
+  // handle error message
   if (error) return <div className="text-center text-red-600 py-8">{error}</div>;
 
+  // return document list
   return (
     <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-md p-8 mt-8">
       <h2 className="text-2xl font-bold mb-6 text-gray-900">Your Documents</h2>
@@ -96,6 +105,7 @@ function DocumentList() {
                     {doc.creator ? truncateMiddle(doc.creator, 10, 8) : <span className="text-gray-400 italic">N/A</span>}
                   </td>
                   <td className="py-2 px-4 border-b">
+                    {/* show status based on document state */}
                     {doc.isRevoked ? (
                       <span className="inline-block bg-red-600 text-white px-2 py-0.5 rounded-full text-xs font-bold" title="This document is revoked and cannot be changed.">Revoked</span>
                     ) : doc._metadata && doc._metadata.previousVersion ? (
@@ -124,4 +134,5 @@ function DocumentList() {
   );
 }
 
+// export the DocumentList component
 export default DocumentList;
