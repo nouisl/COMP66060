@@ -1,8 +1,10 @@
+// imports
 import axios from 'axios';
 
 const PINATA_API_KEY = process.env.REACT_APP_PINATA_API_KEY;
 const PINATA_SECRET_API_KEY = process.env.REACT_APP_PINATA_API_SECRET;
 
+// upload single file to Pinata
 export async function uploadFileToPinata(file) {
   const url = `https://api.pinata.cloud/pinning/pinFileToIPFS`;
   const data = new FormData();
@@ -19,6 +21,7 @@ export async function uploadFileToPinata(file) {
   return res.data.IpfsHash;
 }
 
+// upload JSON to Pinata
 export async function uploadJsonToPinata(json) {
   const url = `https://api.pinata.cloud/pinning/pinJSONToIPFS`;
   const res = await axios.post(url, json, {
@@ -31,6 +34,7 @@ export async function uploadJsonToPinata(json) {
   return res.data.IpfsHash;
 }
 
+// upload folder structure to Pinata
 export async function uploadFolderToPinata(files) {
   const url = `https://api.pinata.cloud/pinning/pinFileToIPFS`;
   const data = new FormData();

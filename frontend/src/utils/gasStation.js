@@ -1,7 +1,9 @@
+// imports
 import { ethers } from 'ethers';
 
 const GAS_STATION_URL = 'https://gasstation.polygon.technology/amoy';
 
+// fetch gas prices from Polygon gas station
 export async function fetchGasPrices() {
   if (!ethers) {
     throw new Error('Ethers library not available');
@@ -14,6 +16,7 @@ export async function fetchGasPrices() {
     }
     const data = await response.json();
     
+    // validate response
     if (!data || typeof data !== 'object') {
       throw new Error('Invalid gas station response: not an object');
     }
@@ -56,6 +59,7 @@ export async function fetchGasPrices() {
   }
 }
 
+// test gas station API connection
 export async function testGasStation() {
   try {
     const gasPrices = await fetchGasPrices();
@@ -73,11 +77,13 @@ export async function testGasStation() {
   }
 }
 
+// get gas configuration for transaction
 export function getGasConfig(gasPrices, speed = 'standard') {
   if (!ethers) {
     throw new Error('Ethers library not available');
   }
   
+  // validate gas prices object
   if (!gasPrices || typeof gasPrices !== 'object') {
     throw new Error('Invalid gas prices object');
   }
