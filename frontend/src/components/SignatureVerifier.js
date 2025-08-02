@@ -1,15 +1,19 @@
+// imports
 import React, { useState } from 'react';
 import { useNotification } from '@web3uikit/core';
 import { verifySignature } from '../utils/crypto';
 
+// SignatureVerifier component
 function SignatureVerifier() {
   const dispatch = useNotification();
+  // define state for form data
   const [documentHash, setDocumentHash] = useState('');
   const [signerAddress, setSignerAddress] = useState('');
   const [signature, setSignature] = useState('');
   const [verificationResult, setVerificationResult] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
+  // verify signature with crypto function
   const handleVerify = async () => {
     if (!documentHash || !signerAddress || !signature) {
       const errorMessage = 'All fields are required';
@@ -57,6 +61,7 @@ function SignatureVerifier() {
     }
   };
 
+  // clear form data
   const handleClear = () => {
     setDocumentHash('');
     setSignerAddress('');
@@ -64,6 +69,7 @@ function SignatureVerifier() {
     setVerificationResult(null);
   };
 
+  // return verification form
   return (
     <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8 mt-8">
       <h2 className="text-2xl font-bold mb-6 text-gray-900">Signature Verification Tool</h2>
@@ -170,4 +176,5 @@ function SignatureVerifier() {
   );
 }
 
+// export the SignatureVerifier component
 export default SignatureVerifier; 
