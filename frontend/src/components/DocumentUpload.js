@@ -130,7 +130,7 @@ function DocumentUpload() {
       }
       
       // encrypt document
-      const { encryptedFile, encryptedKeys, iv, debug } = await encryptDocument(fileBuffer, uploaderAddress, validSignerAddresses, getPublicKey);
+      const { encryptedFile, encryptedKeys, iv } = await encryptDocument(fileBuffer, uploaderAddress, validSignerAddresses, getPublicKey);
       const metadata = {
         title,
         description,
@@ -189,9 +189,9 @@ function DocumentUpload() {
       // estimate gas and create transaction
       let createGasEstimate;
       let createGasConfig;
-      let createRetryCount = 0;
-      const createMaxRetries = 3;
-      while (createRetryCount < createMaxRetries) {
+      let retryCount = 0;
+      const maxRetries = 3;
+      while (retryCount < maxRetries) {
         try {
           createGasEstimate = await contract.createDocument.estimateGas(finalDirHash, validSigners, expiryTimestamp);
           try {
@@ -205,8 +205,8 @@ function DocumentUpload() {
           }
           break;
         } catch (err) {
-          createRetryCount++;
-          if (createRetryCount >= createMaxRetries) {
+          retryCount++;
+          if (retryCount >= maxRetries) {
             createGasEstimate = 300000n;
             createGasConfig = {
               maxFeePerGas: ethers.parseUnits('50', 'gwei'),
@@ -214,7 +214,7 @@ function DocumentUpload() {
             };
             break;
           }
-          await new Promise(resolve => setTimeout(resolve, 1000 * createRetryCount));
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
         }
       }
       
