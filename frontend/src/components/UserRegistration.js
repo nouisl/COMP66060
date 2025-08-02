@@ -1,3 +1,4 @@
+// imports
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import Docu3 from '../contracts/Docu3.json';
@@ -10,7 +11,9 @@ import { generateAndStoreEncryptedKey } from '../utils/crypto';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
+// UserRegistration component
 function UserRegistration() {
+  // define state for form data
   const [firstName, setFirstName] = useState('');
   const [familyName, setFamilyName] = useState('');
   const [email, setEmail] = useState('');
@@ -19,7 +22,7 @@ function UserRegistration() {
   const [pending, setPending] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
-  const [balance, setBalance] = useState(null);
+
   const [networkStatus, setNetworkStatus] = useState('checking');
   const [passphrase, setPassphrase] = useState('');
   const [confirmPassphrase, setConfirmPassphrase] = useState('');
@@ -28,6 +31,7 @@ function UserRegistration() {
   const navigate = useNavigate();
   const { setIsRegistered } = useContext(Web3Context);
 
+  // check wallet balance and network
   useEffect(() => {
     async function checkBalance() {
       if (!window.ethereum) {
@@ -39,17 +43,15 @@ function UserRegistration() {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const address = await signer.getAddress();
-        const bal = await provider.getBalance(address);
-        setBalance(ethers.formatEther(bal));
         setNetworkStatus('connected');
       } catch (err) {
-        setBalance(null);
         setNetworkStatus('error');
       }
     }
     checkBalance();
   }, []);
 
+  // handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -69,6 +71,7 @@ function UserRegistration() {
       const signer = await provider.getSigner();
       const contractWithSigner = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       
+      // check network and balance
       const network = await provider.getNetwork();
       const expectedChainId = 80002;
       if (network.chainId.toString() !== expectedChainId.toString()) {
@@ -80,6 +83,7 @@ function UserRegistration() {
         throw new Error('Your wallet has no MATIC. Please add funds to your wallet.');
       }
       
+      // generate encrypted key and register user
       const dobTimestamp = Math.floor(new Date(dob).getTime() / 1000);
       const userAddress = await signer.getAddress();
       const { publicKey } = await generateAndStoreEncryptedKey(passphrase, userAddress);
@@ -107,6 +111,7 @@ function UserRegistration() {
         }
       };
       
+      // retry transaction if needed
       while (retryCount < maxRetries) {
         try {
           tx = await attemptTransaction();
@@ -121,6 +126,7 @@ function UserRegistration() {
         }
       }
       
+      // wait for transaction confirmation
       setPending(true);
       setSuccess('Transaction sent. Waiting for confirmation...');
       dispatch({
@@ -142,6 +148,7 @@ function UserRegistration() {
         navigate('/dashboard');
       }, 3000);
     } catch (err) {
+      // handle different error types
       let msg = err.reason || err.data?.message || err.message || JSON.stringify(err) || 'Registration failed.';
       if (err.code === 4001 || (msg && msg.toLowerCase().includes('user denied')) || (msg && msg.toLowerCase().includes('rejected'))) {
         msg = 'You rejected the wallet request.';
@@ -207,15 +214,18 @@ function UserRegistration() {
     }
   };
 
+  // return registration form
   return (
     <div className="flex justify-center px-4 mt-8">
       <div className="w-full max-w-2xl bg-white rounded-lg shadow-md p-8 mx-auto">
         <h1 className="text-2xl font-bold mb-6 text-gray-900">Register</h1>
+        {/* show wallet connection warning */}
         {!walletConnected && (
           <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-900 font-semibold">
             Please connect your wallet to register.
           </div>
         )}
+        {/* show network error message */}
         {networkStatus === 'error' && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-sm text-red-800">
@@ -230,6 +240,7 @@ function UserRegistration() {
             </p>
           </div>
         )}
+        {/* show network checking message */}
         {networkStatus === 'checking' && (
           <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-sm text-yellow-800">
@@ -238,6 +249,7 @@ function UserRegistration() {
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* show passphrase warning */}
           <div className="bg-yellow-100 border border-yellow-300 text-yellow-900 px-4 py-3 rounded mb-4 text-sm font-semibold">
             If you forget your passphrase, you will lose access to your encrypted documents. There is no way to recover your passphrase. Please keep it safe.
           </div>
@@ -330,4 +342,5 @@ function UserRegistration() {
   );
 }
 
+// export the UserRegistration component
 export default UserRegistration;
