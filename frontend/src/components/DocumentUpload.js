@@ -1,3 +1,4 @@
+// imports
 import React, { useState, useRef, useEffect } from 'react';
 import Docu3 from '../contracts/Docu3.json';
 import { ethers } from 'ethers';
@@ -7,7 +8,9 @@ import { fetchGasPrices, getGasConfig } from '../utils/gasStation';
 import { encryptDocument } from '../utils/crypto';
 import { useNavigate } from 'react-router-dom';
 
+// DocumentUpload component
 function DocumentUpload() {
+  // define state for form data
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
@@ -24,6 +27,7 @@ function DocumentUpload() {
   const dispatch = useNotification();
   const navigate = useNavigate();
 
+  // get registered users and user profile
   useEffect(() => {
     async function fetchRegisteredUsers() {
       if (!window.ethereum) return;
@@ -64,6 +68,7 @@ function DocumentUpload() {
     fetchUserProfile();
   }, [CONTRACT_ADDRESS]);
 
+  // handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -71,13 +76,18 @@ function DocumentUpload() {
     setUploading(true);
     let provider, signer, uploaderAddress, contract;
     try {
+      // check wallet connection
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
       if (!CONTRACT_ADDRESS) throw new Error('Contract address not configured. Please check your environment variables.');
+      
+      // setup blockchain connection
       provider = new ethers.BrowserProvider(window.ethereum);
       signer = await provider.getSigner();
       uploaderAddress = await signer.getAddress();
       contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
+      
+      // check network and balance
       const network = await provider.getNetwork();
       const expectedChainId = 80002;
       if (network.chainId.toString() !== expectedChainId.toString()) {
@@ -87,11 +97,15 @@ function DocumentUpload() {
       if (balance === 0n) {
         throw new Error('Your wallet has no MATIC. Please add funds to your wallet.');
       }
+      
+      // validate signers
       for (let i = 0; i < signers.length; i++) {
         if (!signers[i].address) {
           throw new Error(`Signer ${i + 1}: ${signers[i].email} is not a registered user.`);
         }
       }
+      
+      // check file extension
       const fileExt = selectedFile.name.split('.').pop().toLowerCase();
       if (!fileExt || fileExt === selectedFile.name) {
         throw new Error('File must have a valid extension');
@@ -99,6 +113,8 @@ function DocumentUpload() {
       const filePath = 'document.' + fileExt;
       const validSignerAddresses = signers.map(s => s.address).filter(addr => addr);
       const allRecipients = includeSelfAsSigner ? [uploaderAddress, ...validSignerAddresses] : validSignerAddresses;
+      
+      // get public keys for encryption
       const getPublicKey = async (address) => {
         const profile = await contract.getUserProfile(address);
         return profile[5];
@@ -112,6 +128,8 @@ function DocumentUpload() {
         if (!publicKey) throw new Error(`No public key found for address: ${addr}`);
         publicKeys[addr] = publicKey;
       }
+      
+      // encrypt document
       const { encryptedFile, encryptedKeys, iv, debug } = await encryptDocument(fileBuffer, uploaderAddress, validSignerAddresses, getPublicKey);
       const metadata = {
         title,
@@ -126,6 +144,8 @@ function DocumentUpload() {
         },
         iv 
       };
+      
+      // upload to IPFS
       const encryptedBlob = new Blob([encryptedFile], { type: 'text/plain' });
       const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
       const files = [
@@ -141,6 +161,8 @@ function DocumentUpload() {
       } catch (uploadError) {
         throw new Error(`Failed to upload encrypted file to IPFS: ${uploadError.message}`);
       }
+      
+      // validate document parameters
       const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
       const validSigners = getValidSigners();
       
@@ -163,6 +185,8 @@ function DocumentUpload() {
           throw new Error(`Signer ${validSigners[i]} is not a registered user or profile fetch failed.`);
         }
       }
+      
+      // estimate gas and create transaction
       let createGasEstimate;
       let createGasConfig;
       let createRetryCount = 0;
@@ -193,15 +217,18 @@ function DocumentUpload() {
           await new Promise(resolve => setTimeout(resolve, 1000 * createRetryCount));
         }
       }
+      
+      // send transaction to blockchain
       const createTx = await contract.createDocument(finalDirHash, validSigners, expiryTimestamp, {
         gasLimit: createGasEstimate * 150n / 100n,
         ...createGasConfig
       });
       const receipt = await createTx.wait();
-      // Find the new document ID from the event or fallback to documentCount
+      
+      // find the new document ID from the event
       let newDocId = null;
       if (receipt && receipt.logs && receipt.logs.length > 0) {
-        // Try to parse the DocumentCreated event
+        // try to get the DocumentCreated event
         for (const log of receipt.logs) {
           try {
             const parsed = contract.interface.parseLog(log);
@@ -217,6 +244,8 @@ function DocumentUpload() {
           newDocId = (await contract.documentCount()).toString();
         } catch {}
       }
+      
+      // show success and navigate
       dispatch({
         type: 'success',
         message: 'Document uploaded and registered on-chain!',
@@ -227,6 +256,7 @@ function DocumentUpload() {
         navigate(`/documents/${newDocId}`);
       }
     } catch (err) {
+      // handle transaction rejection
       if (err.code === 4001 || (err.message && err.message.toLowerCase().includes('user denied'))) {
         dispatch({
           type: 'error',
@@ -235,6 +265,7 @@ function DocumentUpload() {
           position: 'topR',
         });
       } else {
+        // handle other errors
         let errorMessage = 'Upload failed.';
         if (err.message && err.message.includes('IPFS hash required')) {
           errorMessage = 'IPFS hash is empty or invalid.';
@@ -275,19 +306,21 @@ function DocumentUpload() {
     }
   };
 
+  // handle file selection
   const handleFileChange = (e) => {
     setSelectedFile(e.target.files[0]);
     setError('');
     setSuccess('');
   };
 
+  // handle signer email changes
   const handleSignerEmailChange = (idx, email) => {
     const updated = [...signers];
     const normalizedEmail = email.trim().toLowerCase();
     const user = registeredUsers.find(u => u.email === normalizedEmail);
     
     if (user) {
-      // Check if this user is already included (either via checkbox or other signers)
+      // check if this user is already included
       const isDuplicate = (includeSelfAsSigner && userProfile && user.address.toLowerCase() === userProfile.address.toLowerCase()) ||
                          updated.some((s, i) => i !== idx && s.address && s.address.toLowerCase() === user.address.toLowerCase());
       
@@ -302,17 +335,21 @@ function DocumentUpload() {
     setSigners(updated);
   };
   
+  // add new signer field
   const addSigner = () => {
     setSigners([...signers, { email: '', error: '', address: '' }]);
   };
   
+  // remove signer field
   const removeSigner = (idx) => {
     setSigners(signers.filter((_, i) => i !== idx));
   };
+
+  // get valid signer addresses
   const getValidSigners = () => {
     const validSigners = signers.filter(s => s.email.trim() && !s.error && s.address);
     if (includeSelfAsSigner && userProfile) {
-      // Remove duplicates if uploader is already in the signers list
+      // delete duplicates if uploader is already in the signers list
       const uploaderAddress = userProfile.address.toLowerCase();
       const filteredSigners = validSigners.filter(s => s.address.toLowerCase() !== uploaderAddress);
       return [userProfile.address, ...filteredSigners];
@@ -320,6 +357,7 @@ function DocumentUpload() {
     return validSigners.map(s => s.address);
   };
 
+  // check if form is valid
   const isFormValid = () => {
     if (!selectedFile || !title.trim()) return false;
     
@@ -330,6 +368,7 @@ function DocumentUpload() {
     return true;
   };
 
+  // return upload form
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] px-4">
     <div className="w-full max-w-4xl bg-white rounded-lg shadow-md p-8 mx-auto">
@@ -471,4 +510,5 @@ function DocumentUpload() {
   );
 }
 
+// export the DocumentUpload component
 export default DocumentUpload;
