@@ -1,3 +1,4 @@
+// imports
 import { Link } from 'react-router-dom';
 import { ConnectButton } from '@web3uikit/web3';
 import { useMoralis } from 'react-moralis';
@@ -7,10 +8,12 @@ import Docu3 from '../contracts/Docu3.json';
 import { Web3Context } from '../context/Web3Context';
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
+// Header component
 function Header() {
   const { account } = useMoralis();
   const { isRegistered, setIsRegistered } = useContext(Web3Context);
 
+  // check if user is registered
   useEffect(() => {
     async function checkUserRegistered(account) {
       if (!window.ethereum || !account) return false;
@@ -30,6 +33,7 @@ function Header() {
     }
   }, [account, setIsRegistered]);
 
+  // return header 
   return (
     <header className="bg-white shadow-sm sticky top-0 z-20">
       <nav className="container mx-auto px-4">
@@ -71,4 +75,5 @@ function Header() {
   );
 }
 
+// export the Header component
 export default Header; 
