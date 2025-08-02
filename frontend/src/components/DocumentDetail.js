@@ -1,3 +1,4 @@
+// imports
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { ethers } from 'ethers';
@@ -17,11 +18,13 @@ import EthCrypto from 'eth-crypto';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 
-function truncateMiddle(str, frontLen = 8, backLen = 6) {
+// shorten long strings for display
+function shortenMiddle(str, frontLen = 8, backLen = 6) {
   if (!str || str.length <= frontLen + backLen + 3) return str;
   return str.slice(0, frontLen) + '...' + str.slice(-backLen);
 }
 
+// copy button component
 function CopyButton({ value }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -40,9 +43,11 @@ function CopyButton({ value }) {
   );
 }
 
+// DocumentDetail component
 function DocumentDetail() {
   const { docId } = useParams();
   const dispatch = useNotification();
+  // define state for document data
   const [doc, setDoc] = useState(null);
   const [metadata, setMetadata] = useState(null);
   const [account, setAccount] = useState('');
@@ -51,24 +56,29 @@ function DocumentDetail() {
   const [success, setSuccess] = useState('');
   const [hasSigned, setHasSigned] = useState(false);
   const [isCurrentSigner, setIsCurrentSigner] = useState(false);
+  // define state for actions
   const [signing, setSigning] = useState(false);
   const [amending, setAmending] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  // define state for amend form
   const [amendTitle, setAmendTitle] = useState('');
   const [amendDescription, setAmendDescription] = useState('');
   const [amendFile, setAmendFile] = useState(null);
   const [showAmendForm, setShowAmendForm] = useState(false);
+  // define state for decryption
   const [decryptedFileUrl, setDecryptedFileUrl] = useState(null);
   const [documentHash, setDocumentHash] = useState('');
   const [signatures, setSignatures] = useState({});
   const [signatureVerification, setSignatureVerification] = useState({});
   const [decrypting, setDecrypting] = useState(false);
   const [decryptionError, setDecryptionError] = useState('');
+  // define state for modals
   const [showPassModal, setShowPassModal] = useState(false);
   const [passphrase, setPassphrase] = useState('');
   const [passModalError, setPassModalError] = useState('');
   const [noKeyModal, setNoKeyModal] = useState(false);
 
+  // get document data from the blockchain
   useEffect(() => {
     async function fetchDoc() {
       setLoading(true);
@@ -145,7 +155,7 @@ function DocumentDetail() {
         setIsCurrentSigner(currentSigner === userAddress);
         const signed = await contract.hasSigned(docIdNum, userAddress);
         setHasSigned(signed);
-        // Always show persistent message if already signed
+        // show message if already signed
         if (signed && !success) {
           setSuccess('You have already signed this document!');
         }
@@ -187,6 +197,7 @@ function DocumentDetail() {
     fetchDoc();
   }, [docId]);
 
+  // sign document with cryptographic signature
   const handleSign = async () => {
     setSigning(true);
     setError('');
@@ -266,6 +277,7 @@ function DocumentDetail() {
     }
   };
 
+  // revoke document by creator
   const handleRevoke = async () => {
     setRevoking(true);
     try {
@@ -295,6 +307,7 @@ function DocumentDetail() {
     }
   };
 
+  // amend document with new metadata
   const handleAmend = async () => {
     setAmending(true);
     try {
@@ -336,6 +349,7 @@ function DocumentDetail() {
     }
   };
 
+  // start decryption process
   const handleDecrypt = async () => {
     setDecryptionError('');
     setPassModalError('');
@@ -347,6 +361,7 @@ function DocumentDetail() {
     setShowPassModal(true);
   };
 
+  // decrypt document with passphrase
   const handlePassphraseDecrypt = async () => {
     setDecrypting(true);
     setPassModalError('');
@@ -433,10 +448,12 @@ function DocumentDetail() {
     }
   };
 
+  // close no key modal
   const handleCloseNoKeyModal = () => {
     setNoKeyModal(false);
   };
 
+  // copy verification details to clipboard
   const copyVerificationDetails = async (signerAddress, signature) => {
     try {
       const message = createVerificationMessage(documentHash, signerAddress, signature);
@@ -453,6 +470,7 @@ function DocumentDetail() {
     }
   };
 
+  // return document detail
   return (
     <>
       {loading && <div className="text-center py-8">Loading document...</div>}
@@ -463,7 +481,7 @@ function DocumentDetail() {
       
       {!loading && !error && doc && (
         <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-md p-8 mt-8">
-          {/* Revoked badge and info */}
+          {/* show revoked badge if document is revoked */}
           {doc.isRevoked && (
             <div className="mb-4 flex items-center gap-2">
               <span className="inline-block bg-red-600 text-white px-4 py-1 rounded-full font-bold text-lg">Revoked</span>
@@ -472,7 +490,7 @@ function DocumentDetail() {
               </span>
             </div>
           )}
-          {/* Amended badge and previous version info */}
+          {/* show amended badge if document is amended */}
           {metadata?.previousVersion && (
             <div className="mb-4 flex items-center gap-2">
               <span className="inline-block bg-yellow-400 text-white px-4 py-1 rounded-full font-bold text-lg">Amended Version</span>
@@ -488,10 +506,10 @@ function DocumentDetail() {
                 <h3 className="text-lg font-semibold mb-4 text-blue-900">Document Information</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between"><span className="font-semibold">Document ID:</span> <span>{docId}</span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Title:</span> <span title={metadata?.title}>{truncateMiddle(metadata?.title, 18, 8) || <span className="text-gray-400 italic">N/A</span>}</span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Description:</span> <span title={metadata?.description}>{truncateMiddle(metadata?.description, 18, 8) || <span className="text-gray-400 italic">N/A</span>}</span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Creator:</span> <span title={doc.creator} className="font-mono flex items-center">{truncateMiddle(doc.creator, 10, 8)}<CopyButton value={doc.creator} /></span></div>
-                  <div className="flex justify-between"><span className="font-semibold">IPFS Hash:</span> <span title={doc.ipfsHash} className="font-mono flex items-center">{truncateMiddle(doc.ipfsHash, 12, 12)}<CopyButton value={doc.ipfsHash} /></span></div>
+                  <div className="flex justify-between"><span className="font-semibold">Title:</span> <span title={metadata?.title}>{shortenMiddle(metadata?.title, 18, 8) || <span className="text-gray-400 italic">N/A</span>}</span></div>
+                  <div className="flex justify-between"><span className="font-semibold">Description:</span> <span title={metadata?.description}>{shortenMiddle(metadata?.description, 18, 8) || <span className="text-gray-400 italic">N/A</span>}</span></div>
+                  <div className="flex justify-between"><span className="font-semibold">Creator:</span> <span title={doc.creator} className="font-mono flex items-center">{shortenMiddle(doc.creator, 10, 8)}<CopyButton value={doc.creator} /></span></div>
+                  <div className="flex justify-between"><span className="font-semibold">IPFS Hash:</span> <span title={doc.ipfsHash} className="font-mono flex items-center">{shortenMiddle(doc.ipfsHash, 12, 12)}<CopyButton value={doc.ipfsHash} /></span></div>
                   <div className="flex justify-between"><span className="font-semibold">Status:</span> <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${doc.isRevoked ? 'bg-red-100 text-red-700' : doc.fullySigned ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : 'Pending'}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Signatures:</span> <span>{Number(doc.signatureCount) || 0}/{doc.signers?.length || 0}</span></div>
                 </div>
@@ -503,7 +521,7 @@ function DocumentDetail() {
                 <div className="space-y-2">
                   {doc.signers?.map((signer, index) => (
                     <div key={signer} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
-                      <span className="font-mono text-xs truncate max-w-[160px]" title={signer}>{truncateMiddle(signer, 10, 8)}</span>
+                      <span className="font-mono text-xs truncate max-w-[160px]" title={signer}>{shortenMiddle(signer, 10, 8)}</span>
                       <div className="flex items-center space-x-2">
                         {doc.fullySigned || (signer === account && hasSigned) || signatures[signer] ? (
                           <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-700 text-xs font-semibold">Signed</span>
@@ -521,6 +539,7 @@ function DocumentDetail() {
             </div>
           </div>
 
+          {/* show decryption section for encrypted documents */}
           {metadata?.file?.encrypted && !decryptedFileUrl && (
             <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200 flex items-center">
               <div className="flex-1">
@@ -538,11 +557,12 @@ function DocumentDetail() {
             </div>
           )}
 
+          {/* show decrypted document preview */}
           {decryptedFileUrl && (
             <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200 flex flex-col items-center">
               <div className="flex-1 w-full text-center">
                 <h3 className="text-base font-semibold mb-1 text-green-900">Decrypted Document</h3>
-                {/* Inline preview for images and PDFs */}
+                {/* show preview based on file type */}
                 {(() => {
                   const ext = metadata?.file?.name?.split('.').pop()?.toLowerCase();
                   if (['jpg', 'jpeg', 'png'].includes(ext)) {
@@ -568,8 +588,9 @@ function DocumentDetail() {
 
           {success && <div className="mt-4 p-4 bg-green-50 text-green-700 rounded text-center">{success}</div>}
 
+          {/* show action buttons */}
           <div className="mt-8 flex flex-wrap gap-4 justify-center">
-            {/* Sign button */}
+            {/* sign button for current signer */}
             {!hasSigned && isCurrentSigner && !doc.isRevoked && (
               <button
                 onClick={handleSign}
@@ -580,7 +601,7 @@ function DocumentDetail() {
                 {signing ? 'Signing...' : 'Sign Document'}
               </button>
             )}
-            {/* Amend/Revoke buttons for creator */}
+            {/* amend and revoke buttons for uploader */}
             {doc.creator === account && !doc.isRevoked && (
               <>
                 <button
@@ -603,6 +624,7 @@ function DocumentDetail() {
             )}
           </div>
 
+          {/* show amend form when clicked */}
           {showAmendForm && (
             <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
               <h3 className="text-lg font-semibold mb-4">Amend Document</h3>
@@ -647,13 +669,14 @@ function DocumentDetail() {
 
 
 
+          {/* show signatures section */}
           <div className="mt-8">
             <h3 className="text-lg font-semibold mb-4 text-blue-900">Signatures</h3>
             <div className="space-y-2">
               {doc.signers?.map((signer) => (
                 <div key={signer} className="p-4 bg-gray-50 rounded-lg flex flex-col md:flex-row md:items-center md:justify-between border border-gray-200">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs"><strong>Signer:</strong> <span className="font-mono" title={signer}>{truncateMiddle(signer, 10, 8)}</span></p>
+                    <p className="text-xs"><strong>Signer:</strong> <span className="font-mono" title={signer}>{shortenMiddle(signer, 10, 8)}</span></p>
                     <p className="text-xs"><strong>Signature:</strong> {signatures[signer] || (signer === account && hasSigned) ? (
                       <span className="font-mono break-all" title={signatures[signer] || 'Signed by current user'}>
                         {signatures[signer] ? (
@@ -691,7 +714,7 @@ function DocumentDetail() {
             </div>
           </div>
 
-          {/* Passphrase Modal */}
+          {/* passphrase modal for decryption */}
           {showPassModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full">
@@ -727,7 +750,7 @@ function DocumentDetail() {
             </div>
           )}
 
-          {/* No Key Modal */}
+          {/* no key modal */}
           {noKeyModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full text-center">
@@ -756,4 +779,5 @@ function DocumentDetail() {
   );
 }
 
+// export the DocumentDetail component
 export default DocumentDetail; 
