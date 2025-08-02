@@ -1,12 +1,15 @@
+// imports
 import { Link } from 'react-router-dom';
 import { useMoralis } from 'react-moralis';
 
+// Home component
 function Home() {
   const { account } = useMoralis();
 
+  // return home page JSX
   return (
     <div className="min-h-screen">
-      {/* section 1 - intro */}
+      {/* show intro section */}
       <div className="mx-auto px-16 py-16">
         <div className="text-center mb-16">
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
@@ -41,7 +44,7 @@ function Home() {
           </div>
         </div>
 
-        {/* section 2 - features */}
+        {/* show features section */}
         <div className="grid md:grid-cols-3 gap-8 mb-16">
           <div className="bg-blue-50 p-6 rounded-lg">
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
@@ -80,7 +83,7 @@ function Home() {
           </div>
         </div>
 
-        {/* section 3 - how it works */}
+        {/* show how it works section */}
         <div className="bg-blue-50 rounded-lg p-8 mb-16">
           <h2 className="text-3xl font-bold text-center mb-8">How It Works</h2>
           <div className="grid md:grid-cols-4 gap-6">
@@ -115,7 +118,7 @@ function Home() {
           </div>
         </div>
 
-        {/* section 4 - cta */}
+        {/* show call to action section */}
         <div className="text-center">
           <h2 className="text-3xl font-bold mb-4">Ready to Get Started?</h2>
           <p className="text-gray-600 mb-6">
@@ -133,4 +136,5 @@ function Home() {
   );
 }
 
+// export the Home component
 export default Home;
