@@ -473,12 +473,14 @@ function DocumentDetail() {
   // return document detail
   return (
     <>
+      {/* show loading state */}
       {loading && <div className="text-center py-8">Loading document...</div>}
+      {/* show error state */}
       {!loading && error && <div className="text-center text-red-600 py-8">{error}</div>}
+      {/* show not found state */}
       {!loading && !error && !doc && <div className="text-center py-8">Document not found</div>}
       
-      
-      
+      {/* show document content */}
       {!loading && !error && doc && (
         <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-md p-8 mt-8">
           {/* show revoked badge if document is revoked */}
@@ -500,8 +502,10 @@ function DocumentDetail() {
             </div>
           )}
           <h2 className="text-3xl font-bold mb-8 text-gray-900 text-center">Document Details</h2>
+          {/* show document info and signers */}
           <div className="grid md:grid-cols-2 gap-8 mb-8">
             <div>
+              {/* show document information */}
               <div className="bg-gray-50 rounded-lg p-6 shadow-sm">
                 <h3 className="text-lg font-semibold mb-4 text-blue-900">Document Information</h3>
                 <div className="space-y-2 text-sm">
@@ -516,6 +520,7 @@ function DocumentDetail() {
               </div>
             </div>
             <div>
+              {/* show signers list */}
               <div className="bg-gray-50 rounded-lg p-6 shadow-sm">
                 <h3 className="text-lg font-semibold mb-4 text-blue-900">Signers</h3>
                 <div className="space-y-2">
