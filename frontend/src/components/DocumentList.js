@@ -78,7 +78,6 @@ function DocumentList() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr>
-                <th className="py-2 px-4 border-b">ID</th>
                 <th className="py-2 px-4 border-b">Title / File Name</th>
                 <th className="py-2 px-4 border-b">IPFS Hash</th>
                 <th className="py-2 px-4 border-b">Creator</th>
@@ -89,7 +88,6 @@ function DocumentList() {
             <tbody>
               {documents.map(doc => (
                 <tr key={doc.docId}>
-                  <td className="py-2 px-4 border-b">{doc.docId}</td>
                   <td className="py-2 px-4 border-b max-w-[160px] truncate" title={doc._metadata && doc._metadata.title ? doc._metadata.title : doc._metadata && doc._metadata.file && doc._metadata.file.name ? doc._metadata.file.name : ''}>
                     {doc._metadata && doc._metadata.title
                       ? truncateMiddle(doc._metadata.title, 16, 8)
