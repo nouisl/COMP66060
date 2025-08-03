@@ -80,9 +80,9 @@ function DocumentDetail() {
   const [passModalError, setPassModalError] = useState('');
   const [noKeyModal, setNoKeyModal] = useState(false);
 
-  // get document data from the blockchain
+    // get document data from the blockchain
   useEffect(() => {
-    async function fetchDoc() {
+    const fetchDoc = async () => {
       setLoading(true);
       setError('');
       const docIdNum = Number(docId);
@@ -93,20 +93,19 @@ function DocumentDetail() {
       }
       try {
         if (!window.ethereum) throw new Error('No wallet found');
+        if (!CONTRACT_ADDRESS) throw new Error('Contract address not configured');
+        if (!ethers.isAddress(CONTRACT_ADDRESS)) throw new Error('Invalid contract address');
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const userAddress = await signer.getAddress();
         setAccount(userAddress);
         const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
-        const [
-          ipfsHash,
-          creator,
-          signers,
-          createdAt,
-          signatureCount,
-          fullySigned,
-          isRevoked
-        ] = await contract.getDocument(docIdNum);
+        let ipfsHash, creator, signers, createdAt, signatureCount, fullySigned, isRevoked;
+        try {
+          [ipfsHash, creator, signers, createdAt, signatureCount, fullySigned, isRevoked] = await contract.getDocument(docIdNum);
+        } catch (contractError) {
+          throw new Error(`Failed to fetch document from blockchain: ${contractError.message}`);
+        }
         const docObj = {
           ipfsHash,
           creator,
@@ -149,19 +148,46 @@ function DocumentDetail() {
           setMetadata(null);
         }
         if (!meta) {
-          setError('Metadata not found for this document.');
+          setError('Metadata not found for this document. The document may not exist or the IPFS hash is invalid.');
           setLoading(false);
           return;
         }
-        const currentSigner = await contract.getCurrentSigner(docIdNum);
+        let currentSigner, signed;
+        try {
+          currentSigner = await contract.getCurrentSigner(docIdNum);
+          signed = await contract.hasSigned(docIdNum, userAddress);
+        } catch (contractError) {
+          throw new Error(`Failed to fetch signing information: ${contractError.message}`);
+        }
         setCurrentSignerAddress(currentSigner);
         setIsCurrentSigner(currentSigner === userAddress);
-        const signed = await contract.hasSigned(docIdNum, userAddress);
         setHasSigned(signed);
         // show message if already signed
         if (signed && !success) {
           setSuccess('You have already signed this document!');
         }
+        
+        // refresh document data to get updated signature count
+        const [
+          refreshedIpfsHash,
+          refreshedCreator,
+          refreshedSigners,
+          refreshedCreatedAt,
+          refreshedSignatureCount,
+          refreshedFullySigned,
+          refreshedIsRevoked
+        ] = await contract.getDocument(docIdNum);
+        
+        // update document with fresh data
+        setDoc({
+          ipfsHash: refreshedIpfsHash,
+          creator: refreshedCreator,
+          signers: refreshedSigners,
+          createdAt: refreshedCreatedAt,
+          signatureCount: refreshedSignatureCount,
+          fullySigned: refreshedFullySigned,
+          isRevoked: refreshedIsRevoked
+        });
         const signaturesData = {};
         const verificationData = {};
         if (Array.isArray(docObj.signers) && docObj.signers.length > 0) {
@@ -184,6 +210,7 @@ function DocumentDetail() {
         if (meta && meta.documentHash) {
           setDocumentHash(meta.documentHash);
         }
+<<<<<<< Updated upstream
         
         // get expiry information
         try {
@@ -191,12 +218,62 @@ function DocumentDetail() {
           setExpiryInfo({
             expiry: Number(expiry),
             isExpired,
+=======
+<<<<<<< Updated upstream
+=======
+        
+        // get expiry information
+        try {
+          const [expiry, docExpired, timeUntilExpiry, hasExpiry] = await contract.getDocumentExpiryInfo(docIdNum);
+          
+          // also try the simple expiry function
+          try {
+            const simpleExpiry = await contract.getDocumentExpiry(docIdNum);
+          } catch (simpleErr) {
+            // silent error
+          }
+          
+          setExpiryInfo({
+            expiry: Number(expiry),
+            isExpired: docExpired,
+>>>>>>> Stashed changes
             timeUntilExpiry: Number(timeUntilExpiry),
             hasExpiry
           });
         } catch (err) {
           setExpiryInfo(null);
         }
+<<<<<<< Updated upstream
+=======
+        
+        // set up automatic refresh every 10 seconds to keep data current
+        const refreshInterval = setInterval(async () => {
+          try {
+            const [
+              refreshedIpfsHash,
+              refreshedCreator,
+              refreshedSigners,
+              refreshedCreatedAt,
+              refreshedSignatureCount,
+              refreshedFullySigned,
+              refreshedIsRevoked
+            ] = await contract.getDocument(docIdNum);
+            
+            setDoc(prevDoc => ({
+              ...prevDoc,
+              signatureCount: refreshedSignatureCount,
+              fullySigned: refreshedFullySigned,
+              isRevoked: refreshedIsRevoked
+            }));
+          } catch (err) {
+            // silent refresh error
+          }
+        }, 10000); // refresh every 10 seconds
+        
+        // cleanup interval on component unmount
+        return () => clearInterval(refreshInterval);
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
       } catch (err) {
         const errorMessage = err.message || 'Failed to fetch document.';
         setError(errorMessage);
@@ -209,7 +286,7 @@ function DocumentDetail() {
       } finally {
         setLoading(false);
       }
-    }
+    };
     fetchDoc();
   }, [docId]);
 
@@ -284,6 +361,36 @@ function DocumentDetail() {
       setSignatures(prev => ({ ...prev, [account]: signature }));
       const isValid = verifySignature(hashToSign, signature, account);
       setSignatureVerification(prev => ({ ...prev, [account]: isValid }));
+      
+      // automatically refresh document data to get updated signature count
+      setTimeout(async () => {
+        try {
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
+          const docIdNum = Number(docId);
+          const [
+            refreshedIpfsHash,
+            refreshedCreator,
+            refreshedSigners,
+            refreshedCreatedAt,
+            refreshedSignatureCount,
+            refreshedFullySigned,
+            refreshedIsRevoked
+          ] = await contract.getDocument(docIdNum);
+          
+          setDoc({
+            ipfsHash: refreshedIpfsHash,
+            creator: refreshedCreator,
+            signers: refreshedSigners,
+            createdAt: refreshedCreatedAt,
+            signatureCount: refreshedSignatureCount,
+            fullySigned: refreshedFullySigned,
+            isRevoked: refreshedIsRevoked
+          });
+        } catch (err) {
+          // silent refresh error
+        }
+      }, 2000); // wait 2 seconds for blockchain to update
     } catch (err) {
       const errorMessage = err.message || 'Failed to sign document.';
       setError(errorMessage);
@@ -507,9 +614,29 @@ function DocumentDetail() {
     return getSignerPosition(account);
   };
 
+<<<<<<< Updated upstream
   // format expiry information for display
   const formatExpiryInfo = () => {
     if (!expiryInfo || !expiryInfo.hasExpiry) {
+=======
+<<<<<<< Updated upstream
+=======
+  // check if this is a single user document
+  const isSingleUserDocument = () => {
+    return doc && doc.signers && doc.signers.length === 1 && doc.creator === doc.signers[0];
+  };
+
+  // format expiry information for display
+  const formatExpiryInfo = () => {
+    if (!expiryInfo) {
+      return { text: 'Loading expiry...', className: 'text-gray-500' };
+    }
+    
+    // Check if expiry is set (either hasExpiry is true or expiry timestamp is non-zero)
+    const hasExpirySet = expiryInfo.hasExpiry || (expiryInfo.expiry && expiryInfo.expiry > 0);
+    
+    if (!hasExpirySet) {
+>>>>>>> Stashed changes
       return { text: 'No expiry set', className: 'text-gray-500' };
     }
     
@@ -532,6 +659,10 @@ function DocumentDetail() {
     }
   };
 
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
   // return document detail
   return (
     <>
@@ -675,7 +806,7 @@ function DocumentDetail() {
           {success && <div className="mt-4 p-4 bg-green-50 text-green-700 rounded text-center">{success}</div>}
 
           {/* show sequential signing feedback */}
-          {!doc.isRevoked && !doc.fullySigned && (
+          {!doc.isRevoked && !doc.fullySigned && !isSingleUserDocument() && (
             <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
               <h3 className="text-base font-semibold mb-2 text-blue-900">Signing Order</h3>
               {currentSignerAddress && (
@@ -696,10 +827,25 @@ function DocumentDetail() {
             </div>
           )}
 
+          {/* show single user document info */}
+          {!doc.isRevoked && !doc.fullySigned && isSingleUserDocument() && (
+            <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
+              <h3 className="text-base font-semibold mb-2 text-green-900">Single User Document</h3>
+              <p className="text-sm text-green-700">
+                This is a self-signed document. You are the creator and the only signer.
+              </p>
+              {!hasSigned && (
+                <p className="text-sm text-green-700 mt-2">
+                  <strong>Ready to sign:</strong> You can sign this document now since you are the only signer.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* show action buttons */}
           <div className="mt-8 flex flex-wrap gap-4 justify-center">
-            {/* sign button for current signer */}
-            {!hasSigned && isCurrentSigner && !doc.isRevoked && (
+            {/* sign button for current signer or single user document */}
+            {!hasSigned && (isCurrentSigner || isSingleUserDocument()) && !doc.isRevoked && (
               <button
                 onClick={handleSign}
                 disabled={signing || (metadata?.file?.encrypted && !decryptedFileUrl) || doc.isRevoked || (expiryInfo && expiryInfo.hasExpiry && expiryInfo.isExpired)}
