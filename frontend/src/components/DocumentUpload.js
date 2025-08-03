@@ -352,14 +352,22 @@ function DocumentUpload() {
       // delete duplicates if uploader is already in the signers list
       const uploaderAddress = userProfile.address.toLowerCase();
       const filteredSigners = validSigners.filter(s => s.address.toLowerCase() !== uploaderAddress);
-      return [userProfile.address, ...filteredSigners];
+      return [userProfile.address, ...filteredSigners.map(s => s.address)];
     }
     return validSigners.map(s => s.address);
+  };
+
+  // check if there are any invalid signers
+  const hasInvalidSigners = () => {
+    return signers.some(signer => signer.error);
   };
 
   // check if form is valid
   const isFormValid = () => {
     if (!selectedFile || !title.trim()) return false;
+    
+    // check if any signers have errors
+    if (hasInvalidSigners()) return false;
     
     const validSigners = getValidSigners();
     if (validSigners.length === 0) return false;
@@ -493,6 +501,11 @@ function DocumentUpload() {
           </div>
           {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded mb-2">{error}</div>}
           {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded mb-2">{success}</div>}
+          {hasInvalidSigners() && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded mb-2">
+              Please fix the signer errors above before uploading the document.
+            </div>
+          )}
           
           <button
             type="submit"
