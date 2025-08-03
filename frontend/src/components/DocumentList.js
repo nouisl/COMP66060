@@ -109,9 +109,13 @@ function DocumentList() {
                     ) : doc._metadata && doc._metadata.previousVersion ? (
                       <span className="inline-block bg-yellow-400 text-white px-2 py-0.5 rounded-full text-xs font-bold" title="This document is an amended version.">Amended</span>
                     ) : doc.fullySigned ? (
-                      <span className="inline-block bg-green-600 text-white px-2 py-0.5 rounded-full text-xs font-bold">Signed</span>
+                      <span className="inline-block bg-green-600 text-white px-2 py-0.5 rounded-full text-xs font-bold">
+                        {doc.signers && doc.signers.length === 1 && doc.creator === doc.signers[0] ? 'Self-Signed' : 'Signed'}
+                      </span>
                     ) : (
-                      <span className="inline-block bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-bold">Pending</span>
+                      <span className="inline-block bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-bold">
+                        {doc.signers && doc.signers.length === 1 && doc.creator === doc.signers[0] ? 'Self-Sign' : 'Pending'}
+                      </span>
                     )}
                     {doc._metadata && doc._metadata.previousVersion && (
                       <span className="ml-2 text-xs text-blue-700 underline cursor-pointer" title="View previous version">
