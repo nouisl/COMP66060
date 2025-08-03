@@ -39,7 +39,7 @@ function DocumentUpload() {
         for (let addr of addresses) {
           try {
             const profile = await contract.getUserProfile(addr);
-            const [firstName, familyName, email, , isRegistered] = profile;
+            const [firstName, familyName, email, dob, isRegistered, publicKey] = profile;
             if (isRegistered) {
               users.push({ address: addr, firstName, familyName, email: email.trim().toLowerCase() });
             }
@@ -57,7 +57,7 @@ function DocumentUpload() {
         const userAddress = await signer.getAddress();
         const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
         const profile = await contract.getUserProfile(userAddress);
-        const [firstName, familyName, email, , isRegistered] = profile;
+        const [firstName, familyName, email, dob, isRegistered, publicKey] = profile;
         if (isRegistered) {
           setUserProfile({ address: userAddress, firstName, familyName, email: email.trim() });
         }
