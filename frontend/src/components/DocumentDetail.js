@@ -563,7 +563,6 @@ function DocumentDetail() {
     return getSignerPosition(account);
   };
 
-<<<<<<< Updated upstream
   // check if this is a single user document
   const isSingleUserDocument = () => {
     return doc && doc.signers && doc.signers.length === 1 && doc.creator === doc.signers[0];
