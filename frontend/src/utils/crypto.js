@@ -1,6 +1,8 @@
+// imports
 import { ethers } from 'ethers';
 import EthCrypto from 'eth-crypto';
 
+// generate hash from document or IPFS hash
 export async function generateDocumentHash(document, ipfsHash) {
   if (document instanceof File) {
     const arrayBuffer = await document.arrayBuffer();
@@ -11,6 +13,7 @@ export async function generateDocumentHash(document, ipfsHash) {
   }
 }
 
+// encrypt document with symmetric key and asymmetric keys
 export async function encryptDocument(fileBuffer, uploader, signerAddresses, getPublicKey) {
   const allRecipients = [uploader, ...signerAddresses];
   const key = await window.crypto.subtle.generateKey(
@@ -47,6 +50,7 @@ export async function encryptDocument(fileBuffer, uploader, signerAddresses, get
   };
 }
 
+// decrypt document with private key
 export async function decryptDocument(encryptedFile, encryptedKeys, userAddress, passphrase, iv) {
   const encryptedSymmetricKey = encryptedKeys[userAddress];
   if (!encryptedSymmetricKey) {
@@ -72,6 +76,7 @@ export async function decryptDocument(encryptedFile, encryptedKeys, userAddress,
   return decryptedBuffer; 
 }
 
+// sign document hash with wallet
 export async function signDocumentHash(documentHash, signer) {
   try {
     const hashBytes = ethers.isHexString(documentHash) 
@@ -84,6 +89,7 @@ export async function signDocumentHash(documentHash, signer) {
   }
 }
 
+// verify signature with public key
 export function verifySignature(documentHash, signature, expectedSigner) {
   try {
     const hashBytes = ethers.isHexString(documentHash) 
@@ -96,20 +102,24 @@ export function verifySignature(documentHash, signature, expectedSigner) {
   }
 }
 
+// format signature for display
 export function formatSignature(signature) {
   if (!signature) return 'No signature';
   return `${signature.slice(0, 10)}...${signature.slice(-8)}`;
 }
 
+// create verification message
 export function createVerificationMessage(documentHash, signerAddress, signature) {
   return `Document Hash: ${documentHash}\nSigner: ${signerAddress}\nSignature: ${signature}`;
 }
 
+// generate unique document ID
 export function generateDocumentId(ipfsHash, title, creator) {
   const content = `${ipfsHash}-${title}-${creator}-${Date.now()}`;
   return ethers.keccak256(ethers.toUtf8Bytes(content));
 } 
 
+// generate and store encrypted private key
 export async function generateAndStoreEncryptedKey(passphrase, userAddress) {
   const identity = EthCrypto.createIdentity();
   const CryptoJS = require('crypto-js');
@@ -118,10 +128,12 @@ export async function generateAndStoreEncryptedKey(passphrase, userAddress) {
   return { publicKey: identity.publicKey, encryptedPrivateKey };
 }
 
+// get encrypted private key from storage
 export function getEncryptedPrivateKey(userAddress) {
   return localStorage.getItem(`docu3_privateKey_${userAddress}`);
 }
 
+// decrypt private key with passphrase
 export async function getDecryptedPrivateKey(userAddress, passphrase) {
   const encryptedPrivateKey = getEncryptedPrivateKey(userAddress);
   if (!encryptedPrivateKey) throw new Error('No encrypted key found. Please register or restore your key.');
@@ -132,6 +144,7 @@ export async function getDecryptedPrivateKey(userAddress, passphrase) {
   return decryptedPrivateKey;
  }
 
+// download encrypted key as file
 export function downloadEncryptedKey(userAddress) {
   const encryptedKey = getEncryptedPrivateKey(userAddress);
   if (!encryptedKey) return;
@@ -146,6 +159,7 @@ export function downloadEncryptedKey(userAddress) {
   URL.revokeObjectURL(url);
 }
 
+// restore encrypted key to storage
 export function restoreEncryptedKey(userAddress, encryptedKey) {
   localStorage.setItem(`docu3_privateKey_${userAddress}`, encryptedKey);
 } 
