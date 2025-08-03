@@ -201,6 +201,34 @@ contract DocumentSign {
         );
     }
 
+    // get document expiry timestamp
+    function getDocumentExpiry(uint256 _docId) external view returns (uint256) {
+        require(documents[_docId].exists, "Document does not exist");
+        return documents[_docId].expiry;
+    }
+
+    // get document expiry status with additional info
+    function getDocumentExpiryInfo(uint256 _docId) external view returns (
+        uint256 expiry,
+        bool isExpired,
+        uint256 timeUntilExpiry,
+        bool hasExpiry
+    ) {
+        Document storage doc = documents[_docId];
+        require(doc.exists, "Document does not exist");
+        
+        uint256 currentTime = block.timestamp;
+        uint256 docExpiry = doc.expiry;
+        bool expired = docExpiry != 0 && currentTime > docExpiry;
+        uint256 timeLeft = 0;
+        
+        if (docExpiry != 0 && !expired) {
+            timeLeft = docExpiry - currentTime;
+        }
+        
+        return (docExpiry, expired, timeLeft, docExpiry != 0);
+    }
+
     // get user's role for a document
     function getRole(uint256 _docId, address _user) external view returns (Role) {
         require(documents[_docId].exists, "Document does not exist");
