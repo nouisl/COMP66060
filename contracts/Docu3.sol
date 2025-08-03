@@ -209,8 +209,6 @@ contract DocumentSign {
         );
     }
 
-<<<<<<< Updated upstream
-=======
     // get document expiry timestamp
     function getDocumentExpiry(uint256 _docId) external view returns (uint256) {
         require(documents[_docId].exists, "Document does not exist");
@@ -239,7 +237,6 @@ contract DocumentSign {
         return (docExpiry, docExpired, timeLeft, docExpiry != 0);
     }
 
->>>>>>> Stashed changes
     // get user's role for a document
     function getRole(uint256 _docId, address _user) external view returns (Role) {
         require(documents[_docId].exists, "Document does not exist");

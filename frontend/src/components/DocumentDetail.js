@@ -210,7 +210,6 @@ function DocumentDetail() {
         if (meta && meta.documentHash) {
           setDocumentHash(meta.documentHash);
         }
-<<<<<<< Updated upstream
         
         // get expiry information
         try {
@@ -218,62 +217,12 @@ function DocumentDetail() {
           setExpiryInfo({
             expiry: Number(expiry),
             isExpired,
-=======
-<<<<<<< Updated upstream
-=======
-        
-        // get expiry information
-        try {
-          const [expiry, docExpired, timeUntilExpiry, hasExpiry] = await contract.getDocumentExpiryInfo(docIdNum);
-          
-          // also try the simple expiry function
-          try {
-            const simpleExpiry = await contract.getDocumentExpiry(docIdNum);
-          } catch (simpleErr) {
-            // silent error
-          }
-          
-          setExpiryInfo({
-            expiry: Number(expiry),
-            isExpired: docExpired,
->>>>>>> Stashed changes
             timeUntilExpiry: Number(timeUntilExpiry),
             hasExpiry
           });
         } catch (err) {
           setExpiryInfo(null);
         }
-<<<<<<< Updated upstream
-=======
-        
-        // set up automatic refresh every 10 seconds to keep data current
-        const refreshInterval = setInterval(async () => {
-          try {
-            const [
-              refreshedIpfsHash,
-              refreshedCreator,
-              refreshedSigners,
-              refreshedCreatedAt,
-              refreshedSignatureCount,
-              refreshedFullySigned,
-              refreshedIsRevoked
-            ] = await contract.getDocument(docIdNum);
-            
-            setDoc(prevDoc => ({
-              ...prevDoc,
-              signatureCount: refreshedSignatureCount,
-              fullySigned: refreshedFullySigned,
-              isRevoked: refreshedIsRevoked
-            }));
-          } catch (err) {
-            // silent refresh error
-          }
-        }, 10000); // refresh every 10 seconds
-        
-        // cleanup interval on component unmount
-        return () => clearInterval(refreshInterval);
->>>>>>> Stashed changes
->>>>>>> Stashed changes
       } catch (err) {
         const errorMessage = err.message || 'Failed to fetch document.';
         setError(errorMessage);
@@ -615,12 +564,6 @@ function DocumentDetail() {
   };
 
 <<<<<<< Updated upstream
-  // format expiry information for display
-  const formatExpiryInfo = () => {
-    if (!expiryInfo || !expiryInfo.hasExpiry) {
-=======
-<<<<<<< Updated upstream
-=======
   // check if this is a single user document
   const isSingleUserDocument = () => {
     return doc && doc.signers && doc.signers.length === 1 && doc.creator === doc.signers[0];
@@ -636,7 +579,6 @@ function DocumentDetail() {
     const hasExpirySet = expiryInfo.hasExpiry || (expiryInfo.expiry && expiryInfo.expiry > 0);
     
     if (!hasExpirySet) {
->>>>>>> Stashed changes
       return { text: 'No expiry set', className: 'text-gray-500' };
     }
     
@@ -658,11 +600,6 @@ function DocumentDetail() {
       return { text: 'Expires soon', className: 'text-red-600 font-semibold' };
     }
   };
-
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
->>>>>>> Stashed changes
   // return document detail
   return (
     <>
