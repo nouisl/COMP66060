@@ -73,6 +73,7 @@ function DocumentDetail() {
   const [signatureVerification, setSignatureVerification] = useState({});
   const [decrypting, setDecrypting] = useState(false);
   const [decryptionError, setDecryptionError] = useState('');
+  const [expiryInfo, setExpiryInfo] = useState(null);
   // define state for modals
   const [showPassModal, setShowPassModal] = useState(false);
   const [passphrase, setPassphrase] = useState('');
@@ -183,6 +184,19 @@ function DocumentDetail() {
         if (meta && meta.documentHash) {
           setDocumentHash(meta.documentHash);
         }
+        
+        // get expiry information
+        try {
+          const [expiry, isExpired, timeUntilExpiry, hasExpiry] = await contract.getDocumentExpiryInfo(docIdNum);
+          setExpiryInfo({
+            expiry: Number(expiry),
+            isExpired,
+            timeUntilExpiry: Number(timeUntilExpiry),
+            hasExpiry
+          });
+        } catch (err) {
+          setExpiryInfo(null);
+        }
       } catch (err) {
         const errorMessage = err.message || 'Failed to fetch document.';
         setError(errorMessage);
@@ -206,6 +220,11 @@ function DocumentDetail() {
     setSuccess('');
     try {
       if (!window.ethereum) throw new Error('No wallet found');
+      
+      // check if document has expired
+      if (expiryInfo && expiryInfo.hasExpiry && expiryInfo.isExpired) {
+        throw new Error('This document has expired and cannot be signed.');
+      }
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       let hashToSign = documentHash;
@@ -488,6 +507,31 @@ function DocumentDetail() {
     return getSignerPosition(account);
   };
 
+  // format expiry information for display
+  const formatExpiryInfo = () => {
+    if (!expiryInfo || !expiryInfo.hasExpiry) {
+      return { text: 'No expiry set', className: 'text-gray-500' };
+    }
+    
+    if (expiryInfo.isExpired) {
+      return { text: 'Expired', className: 'text-red-600 font-semibold' };
+    }
+    
+    const days = Math.floor(expiryInfo.timeUntilExpiry / 86400);
+    const hours = Math.floor((expiryInfo.timeUntilExpiry % 86400) / 3600);
+    const minutes = Math.floor((expiryInfo.timeUntilExpiry % 3600) / 60);
+    
+    if (days > 0) {
+      return { text: `Expires in ${days} day${days > 1 ? 's' : ''}`, className: 'text-yellow-600' };
+    } else if (hours > 0) {
+      return { text: `Expires in ${hours} hour${hours > 1 ? 's' : ''}`, className: 'text-yellow-600' };
+    } else if (minutes > 0) {
+      return { text: `Expires in ${minutes} minute${minutes > 1 ? 's' : ''}`, className: 'text-red-600 font-semibold' };
+    } else {
+      return { text: 'Expires soon', className: 'text-red-600 font-semibold' };
+    }
+  };
+
   // return document detail
   return (
     <>
@@ -519,6 +563,26 @@ function DocumentDetail() {
               </span>
             </div>
           )}
+          
+          {/* show expiry warning if document is close to expiring */}
+          {expiryInfo && expiryInfo.hasExpiry && !expiryInfo.isExpired && expiryInfo.timeUntilExpiry < 3600 && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="inline-block bg-red-500 text-white px-4 py-1 rounded-full font-bold text-lg">Expiring Soon</span>
+              <span className="text-xs text-red-700" title="This document will expire soon. Please sign it before it expires.">
+                (This document expires in less than 1 hour. Sign it quickly!)
+              </span>
+            </div>
+          )}
+          
+          {/* show expired badge if document has expired */}
+          {expiryInfo && expiryInfo.hasExpiry && expiryInfo.isExpired && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="inline-block bg-red-600 text-white px-4 py-1 rounded-full font-bold text-lg">Expired</span>
+              <span className="text-xs text-red-700" title="This document has expired and cannot be signed.">
+                (This document has expired and cannot be signed or amended.)
+              </span>
+            </div>
+          )}
           <h2 className="text-3xl font-bold mb-8 text-gray-900 text-center">Document Details</h2>
           {/* show document info and signers */}
           <div className="grid md:grid-cols-2 gap-8 mb-8">
@@ -534,6 +598,7 @@ function DocumentDetail() {
                   <div className="flex justify-between"><span className="font-semibold">IPFS Hash:</span> <span title={doc.ipfsHash} className="font-mono flex items-center">{shortenMiddle(doc.ipfsHash, 12, 12)}<CopyButton value={doc.ipfsHash} /></span></div>
                   <div className="flex justify-between"><span className="font-semibold">Status:</span> <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${doc.isRevoked ? 'bg-red-100 text-red-700' : doc.fullySigned ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : 'Pending'}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Signatures:</span> <span>{Number(doc.signatureCount) || 0}/{doc.signers?.length || 0}</span></div>
+                  <div className="flex justify-between"><span className="font-semibold">Expiry:</span> <span className={formatExpiryInfo().className}>{formatExpiryInfo().text}</span></div>
                 </div>
               </div>
             </div>
@@ -637,8 +702,12 @@ function DocumentDetail() {
             {!hasSigned && isCurrentSigner && !doc.isRevoked && (
               <button
                 onClick={handleSign}
-                disabled={signing || (metadata?.file?.encrypted && !decryptedFileUrl) || doc.isRevoked}
-                title={doc.isRevoked ? 'This document is revoked and cannot be signed.' : ''}
+                disabled={signing || (metadata?.file?.encrypted && !decryptedFileUrl) || doc.isRevoked || (expiryInfo && expiryInfo.hasExpiry && expiryInfo.isExpired)}
+                title={
+                  doc.isRevoked ? 'This document is revoked and cannot be signed.' :
+                  (expiryInfo && expiryInfo.hasExpiry && expiryInfo.isExpired) ? 'This document has expired and cannot be signed.' :
+                  ''
+                }
                 className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
               >
                 {signing ? 'Signing...' : 'Sign Document'}
