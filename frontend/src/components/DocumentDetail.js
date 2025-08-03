@@ -56,6 +56,7 @@ function DocumentDetail() {
   const [success, setSuccess] = useState('');
   const [hasSigned, setHasSigned] = useState(false);
   const [isCurrentSigner, setIsCurrentSigner] = useState(false);
+  const [currentSignerAddress, setCurrentSignerAddress] = useState('');
   // define state for actions
   const [signing, setSigning] = useState(false);
   const [amending, setAmending] = useState(false);
@@ -152,6 +153,7 @@ function DocumentDetail() {
           return;
         }
         const currentSigner = await contract.getCurrentSigner(docIdNum);
+        setCurrentSignerAddress(currentSigner);
         setIsCurrentSigner(currentSigner === userAddress);
         const signed = await contract.hasSigned(docIdNum, userAddress);
         setHasSigned(signed);
@@ -470,6 +472,22 @@ function DocumentDetail() {
     }
   };
 
+  // get signer position in the signing order
+  const getSignerPosition = (signerAddress) => {
+    if (!doc?.signers) return -1;
+    return doc.signers.findIndex(signer => signer.toLowerCase() === signerAddress.toLowerCase()) + 1;
+  };
+
+  // get current signer position
+  const getCurrentSignerPosition = () => {
+    return getSignerPosition(currentSignerAddress);
+  };
+
+  // get user's position in signing order
+  const getUserPosition = () => {
+    return getSignerPosition(account);
+  };
+
   // return document detail
   return (
     <>
@@ -526,16 +544,14 @@ function DocumentDetail() {
                 <div className="space-y-2">
                   {doc.signers?.map((signer, index) => (
                     <div key={signer} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
-                      <span className="font-mono text-xs truncate max-w-[160px]" title={signer}>{shortenMiddle(signer, 10, 8)}</span>
+                      <span className="font-mono text-xs break-all" title={signer}>{signer}</span>
                       <div className="flex items-center space-x-2">
                         {doc.fullySigned || (signer === account && hasSigned) || signatures[signer] ? (
                           <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-700 text-xs font-semibold">Signed</span>
                         ) : (
                           <span className="inline-block px-2 py-0.5 rounded bg-yellow-100 text-yellow-700 text-xs font-semibold">Pending</span>
                         )}
-                        {signatures[signer] && signatureVerification[signer] !== undefined && (
-                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${signatureVerification[signer] ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>{signatureVerification[signer] ? 'Valid' : 'Invalid'}</span>
-                        )}
+
                       </div>
                     </div>
                   ))}
@@ -592,6 +608,28 @@ function DocumentDetail() {
           )}
 
           {success && <div className="mt-4 p-4 bg-green-50 text-green-700 rounded text-center">{success}</div>}
+
+          {/* show sequential signing feedback */}
+          {!doc.isRevoked && !doc.fullySigned && (
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h3 className="text-base font-semibold mb-2 text-blue-900">Signing Order</h3>
+              {currentSignerAddress && (
+                <p className="text-sm text-blue-700 mb-2">
+                  <strong>Current signer:</strong> {shortenMiddle(currentSignerAddress, 10, 8)} (Position {getCurrentSignerPosition()})
+                </p>
+              )}
+              {!hasSigned && !isCurrentSigner && getUserPosition() > 0 && (
+                <p className="text-sm text-yellow-700">
+                  <strong>Your position:</strong> {getUserPosition()}. You can sign when it's your turn.
+                </p>
+              )}
+              {!hasSigned && getUserPosition() === 0 && (
+                <p className="text-sm text-gray-600">
+                  You are not in the signing order for this document.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* show action buttons */}
           <div className="mt-8 flex flex-wrap gap-4 justify-center">
@@ -681,7 +719,7 @@ function DocumentDetail() {
               {doc.signers?.map((signer) => (
                 <div key={signer} className="p-4 bg-gray-50 rounded-lg flex flex-col md:flex-row md:items-center md:justify-between border border-gray-200">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs"><strong>Signer:</strong> <span className="font-mono" title={signer}>{shortenMiddle(signer, 10, 8)}</span></p>
+                    <p className="text-xs"><strong>Signer:</strong> <span className="font-mono break-all" title={signer}>{signer}</span></p>
                     <p className="text-xs"><strong>Signature:</strong> {signatures[signer] || (signer === account && hasSigned) ? (
                       <span className="font-mono break-all" title={signatures[signer] || 'Signed by current user'}>
                         {signatures[signer] ? (
