@@ -64,6 +64,9 @@ npx hardhat compile
 
 # Deploy to Polygon Amoy testnet
 npx hardhat run scripts/deploy.js --network amoy
+
+# Test contract code
+npx hardhat test
 ```
 
 After successful deployment, the script will output your contract address. Copy this address.
@@ -123,6 +126,9 @@ COMP66060
  │   └── deploy.js
  ├── test
  │   ├── Docu3.test.js
+ │   ├── Docu3.security.test.js
+ │   ├── Docu3.performance.test.js
+ │   ├── Docu3.integration.test.js
  │   └── Docu3.ipfs.integration.test.js
  ├── hardhat.config.js
  └── README.md
@@ -186,14 +192,27 @@ npm run eject       # Eject from Create React App
 
 ## Testing
 
+The project includes comprehensive test suites covering all aspects of the smart contract functionality.
+
+### Running Tests
+
 ```sh
-# Run smart contract tests
+# Run all smart contract tests
 npx hardhat test
+
+# Run specific smart contract test categories
+npx hardhat test test/Docu3.test.js                    # Basic functionality tests
+npx hardhat test test/Docu3.security.test.js           # Security and access control tests
+npx hardhat test test/Docu3.performance.test.js        # Performance and gas optimization tests
+npx hardhat test test/Docu3.integration.test.js        # Integration and flow tests
+npx hardhat test test/Docu3.ipfs.integration.test.js   # IPFS integration tests
 
 # Run frontend tests
 cd frontend
 npm test
 ```
+
+
 
 ---
 
