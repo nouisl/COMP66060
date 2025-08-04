@@ -2,15 +2,10 @@ require('dotenv').config();
 
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
-const PinataSDK = require('@pinata/sdk');
 
-// initialize pinata client
-const pinata = new PinataSDK(process.env.PINATA_API_KEY, process.env.PINATA_API_SECRET);
-
-describe("Docu3 with Pinata IPFS integration", function () {
+describe("DocumentSign with Pinata IPFS integration", function () {
   let documentSign, owner, signer1;
 
-  // setup before all tests
   before(async function () {
     [owner, signer1] = await ethers.getSigners();
     const DocumentSign = await ethers.getContractFactory("DocumentSign");
@@ -18,8 +13,14 @@ describe("Docu3 with Pinata IPFS integration", function () {
     await documentSign.waitForDeployment();
   });
 
-  // test uploading file to IPFS and storing hash on-chain
   it("uploads a file to IPFS via Pinata and stores the hash on-chain", async function () {
+    if (!process.env.PINATA_API_KEY || !process.env.PINATA_API_SECRET) {
+      this.skip();
+    }
+
+    const PinataSDK = require('@pinata/sdk');
+    const pinata = new PinataSDK(process.env.PINATA_API_KEY, process.env.PINATA_API_SECRET);
+    
     const result = await pinata.pinJSONToIPFS({ message: "Hi, decentralized world!" });
     const ipfsHash = result.IpfsHash;
     
@@ -32,8 +33,14 @@ describe("Docu3 with Pinata IPFS integration", function () {
     expect(doc.ipfsHash).to.equal(ipfsHash);
   });
 
-  // test creating document with IPFS hash and signing
   it("creates document with IPFS hash and allows signing", async function () {
+    if (!process.env.PINATA_API_KEY || !process.env.PINATA_API_SECRET) {
+      this.skip();
+    }
+
+    const PinataSDK = require('@pinata/sdk');
+    const pinata = new PinataSDK(process.env.PINATA_API_KEY, process.env.PINATA_API_SECRET);
+    
     const testData = { 
       title: "Test Document", 
       content: "This is a test document for IPFS integration",
@@ -57,8 +64,14 @@ describe("Docu3 with Pinata IPFS integration", function () {
     expect(doc.fullySigned).to.be.true;
   });
 
-  // test document amendment with new IPFS hash
   it("handles document amendment with new IPFS hash", async function () {
+    if (!process.env.PINATA_API_KEY || !process.env.PINATA_API_SECRET) {
+      this.skip();
+    }
+
+    const PinataSDK = require('@pinata/sdk');
+    const pinata = new PinataSDK(process.env.PINATA_API_KEY, process.env.PINATA_API_SECRET);
+    
     const initialData = { content: "Initial document content" };
     const result1 = await pinata.pinJSONToIPFS(initialData);
     const initialHash = result1.IpfsHash;
