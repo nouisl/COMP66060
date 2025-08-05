@@ -94,7 +94,6 @@ contract DocumentSign {
     // create new document with signers and expiry
     function createDocument(string memory _ipfsHash, address[] memory _signers, uint256 _expiry) external returns (uint256) {
         require(bytes(_ipfsHash).length > 0, "IPFS hash required");
-        require(_signers.length > 0, "At least one signer required");
         require(_expiry == 0 || _expiry > block.timestamp, "Expiry must be in the future");
         documentCount++;
         Document storage doc = documents[documentCount];
@@ -104,12 +103,21 @@ contract DocumentSign {
         doc.exists = true;
         doc.expiry = _expiry;
         doc.roles[msg.sender] = Role.Owner;
-        for (uint i = 0; i < _signers.length; i++) {
-            require(_signers[i] != address(0), "Invalid signer address");
-            doc.signers.push(_signers[i]);
-            doc.roles[_signers[i]] = Role.Signer;
+        
+        // allow single user signing (creator can be the only signer)
+        if (_signers.length == 0) {
+            // single user document - creator is the only signer
+            doc.signers.push(msg.sender);
+            doc.roles[msg.sender] = Role.Signer;
+        } else {
+            // multi-user document
+            for (uint i = 0; i < _signers.length; i++) {
+                require(_signers[i] != address(0), "Invalid signer address");
+                doc.signers.push(_signers[i]);
+                doc.roles[_signers[i]] = Role.Signer;
+            }
         }
-        emit DocumentCreated(documentCount, _ipfsHash, msg.sender, _signers, block.timestamp);
+        emit DocumentCreated(documentCount, _ipfsHash, msg.sender, doc.signers, block.timestamp);
         return documentCount;
     }
 
@@ -199,6 +207,34 @@ contract DocumentSign {
             allSigned,
             doc.isRevoked
         );
+    }
+
+    // get document expiry timestamp
+    function getDocumentExpiry(uint256 _docId) external view returns (uint256) {
+        require(documents[_docId].exists, "Document does not exist");
+        return documents[_docId].expiry;
+    }
+
+    // get document expiry status with additional info
+    function getDocumentExpiryInfo(uint256 _docId) external view returns (
+        uint256 expiry,
+        bool expired,
+        uint256 timeUntilExpiry,
+        bool hasExpiry
+    ) {
+        Document storage doc = documents[_docId];
+        require(doc.exists, "Document does not exist");
+        
+        uint256 currentTime = block.timestamp;
+        uint256 docExpiry = doc.expiry;
+        bool docExpired = docExpiry != 0 && currentTime > docExpiry;
+        uint256 timeLeft = 0;
+        
+        if (docExpiry != 0 && !docExpired) {
+            timeLeft = docExpiry - currentTime;
+        }
+        
+        return (docExpiry, docExpired, timeLeft, docExpiry != 0);
     }
 
     // get user's role for a document
@@ -318,5 +354,12 @@ contract DocumentSign {
             }
         }
         return false;
+    }
+
+    // check if document is single-user (creator is the only signer)
+    function isSingleUserDocument(uint256 _docId) external view returns (bool) {
+        Document storage doc = documents[_docId];
+        require(doc.exists, "Document does not exist");
+        return doc.signers.length == 1 && doc.signers[0] == doc.creator;
     }
 } 

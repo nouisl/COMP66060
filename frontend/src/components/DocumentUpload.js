@@ -31,6 +31,7 @@ function DocumentUpload() {
   useEffect(() => {
     async function fetchRegisteredUsers() {
       if (!window.ethereum) return;
+      if (!CONTRACT_ADDRESS) return;
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
@@ -39,7 +40,7 @@ function DocumentUpload() {
         for (let addr of addresses) {
           try {
             const profile = await contract.getUserProfile(addr);
-            const [firstName, familyName, email, , isRegistered] = profile;
+            const [firstName, familyName, email, dob, isRegistered, publicKey] = profile;
             if (isRegistered) {
               users.push({ address: addr, firstName, familyName, email: email.trim().toLowerCase() });
             }
@@ -51,13 +52,14 @@ function DocumentUpload() {
 
     async function fetchUserProfile() {
       if (!window.ethereum) return;
+      if (!CONTRACT_ADDRESS) return;
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const userAddress = await signer.getAddress();
         const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
         const profile = await contract.getUserProfile(userAddress);
-        const [firstName, familyName, email, , isRegistered] = profile;
+        const [firstName, familyName, email, dob, isRegistered, publicKey] = profile;
         if (isRegistered) {
           setUserProfile({ address: userAddress, firstName, familyName, email: email.trim() });
         }
@@ -80,6 +82,7 @@ function DocumentUpload() {
       if (!window.ethereum) throw new Error('No wallet found');
       if (!selectedFile) throw new Error('Please select a file to upload.');
       if (!CONTRACT_ADDRESS) throw new Error('Contract address not configured. Please check your environment variables.');
+      if (!ethers.isAddress(CONTRACT_ADDRESS)) throw new Error('Invalid contract address. Please check your environment variables.');
       
       // setup blockchain connection
       provider = new ethers.BrowserProvider(window.ethereum);
@@ -88,20 +91,26 @@ function DocumentUpload() {
       contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       
       // check network and balance
-      const network = await provider.getNetwork();
-      const expectedChainId = 80002;
-      if (network.chainId.toString() !== expectedChainId.toString()) {
-        throw new Error(`Please switch to Polygon Amoy testnet (Chain ID: ${expectedChainId}). Current network: ${network.name} (Chain ID: ${network.chainId})`);
-      }
-      const balance = await provider.getBalance(uploaderAddress);
-      if (balance === 0n) {
-        throw new Error('Your wallet has no MATIC. Please add funds to your wallet.');
+      try {
+        const network = await provider.getNetwork();
+        const expectedChainId = 80002;
+        if (network.chainId.toString() !== expectedChainId.toString()) {
+          throw new Error(`Please switch to Polygon Amoy testnet (Chain ID: ${expectedChainId}). Current network: ${network.name} (Chain ID: ${network.chainId})`);
+        }
+        const balance = await provider.getBalance(uploaderAddress);
+        if (balance === 0n) {
+          throw new Error('Your wallet has no POL. Please add funds to your wallet.');
+        }
+      } catch (networkError) {
+        throw new Error(`Network connection error: ${networkError.message}`);
       }
       
-      // validate signers
-      for (let i = 0; i < signers.length; i++) {
-        if (!signers[i].address) {
-          throw new Error(`Signer ${i + 1}: ${signers[i].email} is not a registered user.`);
+      // validate signers (only if there are any)
+      if (signers.length > 0) {
+        for (let i = 0; i < signers.length; i++) {
+          if (!signers[i].address) {
+            throw new Error(`Signer ${i + 1}: ${signers[i].email} is not a registered user.`);
+          }
         }
       }
       
@@ -166,11 +175,14 @@ function DocumentUpload() {
       const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
       const validSigners = getValidSigners();
       
+      // validate expiry timestamp
+      
       if (expiryTimestamp > 0 && expiryTimestamp <= Math.floor(Date.now() / 1000)) {
         throw new Error('Expiry date must be in the future.');
       }
-      if (validSigners.length === 0) {
-        throw new Error('No valid signers found. At least one signer is required.');
+      // allow single user signing - no minimum signer requirement
+      if (validSigners.length === 0 && !includeSelfAsSigner) {
+        throw new Error('No valid signers found. Either add signers or include yourself as a signer.');
       }
       for (let i = 0; i < validSigners.length; i++) {
         if (!validSigners[i] || validSigners[i] === '0x0000000000000000000000000000000000000000') {
@@ -359,6 +371,10 @@ function DocumentUpload() {
 
   // check if there are any invalid signers
   const hasInvalidSigners = () => {
+    // for single user documents, don't check signer errors since there are no signers
+    if (signers.length === 0 && includeSelfAsSigner) {
+      return false;
+    }
     return signers.some(signer => signer.error);
   };
 
@@ -366,11 +382,17 @@ function DocumentUpload() {
   const isFormValid = () => {
     if (!selectedFile || !title.trim()) return false;
     
-    // check if any signers have errors
+    // check if any signers have errors (only for multi-user documents)
     if (hasInvalidSigners()) return false;
     
+    // for single user documents, only need file and title
+    if (signers.length === 0 && includeSelfAsSigner) {
+      return selectedFile && title.trim() && userProfile;
+    }
+    
     const validSigners = getValidSigners();
-    if (validSigners.length === 0) return false;
+    // allow single user signing (no signers required)
+    if (validSigners.length === 0 && !includeSelfAsSigner) return false;
     if (includeSelfAsSigner && !userProfile) return false;
     
     return true;
@@ -417,9 +439,9 @@ function DocumentUpload() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Signers (enter registered user email) *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Signers (enter registered user email)</label>
             
-            <div className="mb-3">
+            <div className="mb-3 space-y-2">
               <label className="flex items-center">
                 <input
                   type="checkbox"
@@ -429,9 +451,30 @@ function DocumentUpload() {
                 />
                 <span className="text-sm text-gray-700">Include myself as a signer</span>
               </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={signers.length === 0 && includeSelfAsSigner}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setIncludeSelfAsSigner(true);
+                      setSigners([]);
+                    } else {
+                      setSigners([{ email: '', error: '', address: '' }]);
+                    }
+                  }}
+                  className="mr-2 h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-700">Single user document (I will be the only signer)</span>
+              </label>
               {includeSelfAsSigner && userProfile && (
                 <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
                   <strong>Note:</strong> You will be the first signer. Remove your email from the signer list below to avoid duplicates.
+                </div>
+              )}
+              {signers.length === 0 && includeSelfAsSigner && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
+                  <strong>Single User Document:</strong> You will be the creator and the only signer. This creates a self-signed document.
                 </div>
               )}
             </div>
