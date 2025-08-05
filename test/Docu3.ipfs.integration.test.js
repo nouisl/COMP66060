@@ -1,11 +1,14 @@
+// imports
 require('dotenv').config();
 
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
+// DocumentSign with Pinata IPFS integration tests
 describe("DocumentSign with Pinata IPFS integration", function () {
   let documentSign, owner, signer1;
 
+  // setup before all tests
   before(async function () {
     [owner, signer1] = await ethers.getSigners();
     const DocumentSign = await ethers.getContractFactory("DocumentSign");
@@ -13,6 +16,7 @@ describe("DocumentSign with Pinata IPFS integration", function () {
     await documentSign.waitForDeployment();
   });
 
+  // test file upload to IPFS and on-chain storage
   it("uploads a file to IPFS via Pinata and stores the hash on-chain", async function () {
     if (!process.env.PINATA_API_KEY || !process.env.PINATA_API_SECRET) {
       this.skip();
@@ -33,6 +37,7 @@ describe("DocumentSign with Pinata IPFS integration", function () {
     expect(doc.ipfsHash).to.equal(ipfsHash);
   });
 
+  // test document creation with IPFS hash and signing
   it("creates document with IPFS hash and allows signing", async function () {
     if (!process.env.PINATA_API_KEY || !process.env.PINATA_API_SECRET) {
       this.skip();
@@ -64,6 +69,7 @@ describe("DocumentSign with Pinata IPFS integration", function () {
     expect(doc.fullySigned).to.be.true;
   });
 
+  // test document amendment with new IPFS hash
   it("handles document amendment with new IPFS hash", async function () {
     if (!process.env.PINATA_API_KEY || !process.env.PINATA_API_SECRET) {
       this.skip();
