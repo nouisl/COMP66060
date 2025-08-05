@@ -1,5 +1,6 @@
 import { fetchGasPrices, testGasStation, getGasConfig } from '../../utils/gasStation';
 
+// mock ethers
 jest.mock('ethers', () => ({
   ethers: {
     parseUnits: jest.fn().mockReturnValue('1000000000')
@@ -14,6 +15,7 @@ describe('Gas Station Utils', () => {
   });
 
   describe('fetchGasPrices', () => {
+    // test successful gas price fetching
     test('should fetch gas prices successfully', async () => {
       const mockResponse = {
         safeLow: { maxPriorityFee: 1.5, maxFee: 30 },
@@ -41,6 +43,7 @@ describe('Gas Station Utils', () => {
       });
     });
 
+    // test API error handling
     test('should handle API error', async () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
@@ -50,6 +53,7 @@ describe('Gas Station Utils', () => {
       await expect(fetchGasPrices()).rejects.toThrow('Gas station API error: 500');
     });
 
+    // test invalid response format handling
     test('should handle invalid response format', async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
@@ -61,6 +65,7 @@ describe('Gas Station Utils', () => {
   });
 
   describe('testGasStation', () => {
+    // test successful API test
     test('should return success when API is working', async () => {
       const mockResponse = {
         safeLow: { maxPriorityFee: 1.5, maxFee: 30 },
@@ -80,6 +85,7 @@ describe('Gas Station Utils', () => {
       expect(result.data).toBeDefined();
     });
 
+    // test API accessibility failure
     test('should return failure when API is not accessible', async () => {
       global.fetch.mockRejectedValueOnce(new Error('Network error'));
 
@@ -98,15 +104,18 @@ describe('Gas Station Utils', () => {
       fast: { maxPriorityFee: 3, maxFee: 40 }
     };
 
+    // test invalid gas prices object
     test('should throw error for invalid gas prices object', () => {
       expect(() => getGasConfig(null)).toThrow('Invalid gas prices object');
       expect(() => getGasConfig('invalid')).toThrow('Invalid gas prices object');
     });
 
+    // test invalid speed parameter
     test('should throw error for invalid speed', () => {
       expect(() => getGasConfig(mockGasPrices, 'invalid')).toThrow('Invalid gas speed: invalid');
     });
 
+    // test invalid gas values
     test('should throw error for invalid gas values', () => {
       const invalidGasPrices = {
         standard: { maxPriorityFee: -1, maxFee: 35 }
