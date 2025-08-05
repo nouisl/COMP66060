@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import Footer from '../../components/Footer';
 
+// helper function to render with router
 const renderWithRouter = (component) => {
   return render(
     <BrowserRouter>
@@ -12,6 +13,7 @@ const renderWithRouter = (component) => {
 };
 
 describe('Footer Component', () => {
+  // test footer branding
   test('renders footer with Docu3 branding', () => {
     renderWithRouter(<Footer />);
     
@@ -19,6 +21,7 @@ describe('Footer Component', () => {
     expect(screen.getByText(/Decentralized document signing system/i)).toBeInTheDocument();
   });
 
+  // test quick links section
   test('renders quick links section', () => {
     renderWithRouter(<Footer />);
     
@@ -28,6 +31,7 @@ describe('Footer Component', () => {
     expect(screen.getByText('View Documents')).toBeInTheDocument();
   });
 
+  // test resources section
   test('renders resources section', () => {
     renderWithRouter(<Footer />);
     
@@ -37,6 +41,7 @@ describe('Footer Component', () => {
     expect(screen.getByText('IPFS')).toBeInTheDocument();
   });
 
+  // test copyright notice
   test('renders copyright notice', () => {
     renderWithRouter(<Footer />);
     
@@ -44,6 +49,7 @@ describe('Footer Component', () => {
     expect(screen.getByText(`© ${currentYear} Docu³. All rights reserved.`)).toBeInTheDocument();
   });
 
+  // test navigation links
   test('renders all navigation links', () => {
     renderWithRouter(<Footer />);
     
@@ -56,6 +62,7 @@ describe('Footer Component', () => {
     expect(documentsLink).toHaveAttribute('href', '/documents');
   });
 
+  // test external resource links
   test('renders external resource links', () => {
     renderWithRouter(<Footer />);
     
