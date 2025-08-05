@@ -5,14 +5,17 @@ import SignatureVerifier from '../../components/SignatureVerifier';
 
 const mockDispatch = jest.fn();
 
+// mock web3uikit
 jest.mock('@web3uikit/core', () => ({
   useNotification: () => mockDispatch
 }));
 
+// mock crypto utils
 jest.mock('../../utils/crypto', () => ({
   verifySignature: jest.fn()
 }));
 
+// helper function to render with router
 const renderWithRouter = (component) => {
   return render(
     <BrowserRouter>
@@ -26,6 +29,7 @@ describe('SignatureVerifier Component', () => {
     jest.clearAllMocks();
   });
 
+  // test signature verification form rendering
   test('renders signature verification form', () => {
     renderWithRouter(<SignatureVerifier />);
     
@@ -37,6 +41,7 @@ describe('SignatureVerifier Component', () => {
     expect(screen.getByText('Clear')).toBeInTheDocument();
   });
 
+  // test help sections rendering
   test('renders help sections', () => {
     renderWithRouter(<SignatureVerifier />);
     
@@ -46,6 +51,7 @@ describe('SignatureVerifier Component', () => {
     expect(screen.getByText(/Enter the signer's Ethereum address/)).toBeInTheDocument();
   });
 
+  // test form input changes
   test('handles form input changes', () => {
     renderWithRouter(<SignatureVerifier />);
     
@@ -62,6 +68,7 @@ describe('SignatureVerifier Component', () => {
     expect(signatureInput.value).toBe('0xsignature123');
   });
 
+  // test verify button disabled state
   test('verify button is disabled when fields are empty', () => {
     renderWithRouter(<SignatureVerifier />);
     
@@ -69,6 +76,7 @@ describe('SignatureVerifier Component', () => {
     expect(verifyButton).toBeDisabled();
   });
 
+  // test verify button enabled state
   test('verify button is enabled when all fields are filled', () => {
     renderWithRouter(<SignatureVerifier />);
     
@@ -84,6 +92,7 @@ describe('SignatureVerifier Component', () => {
     expect(verifyButton).not.toBeDisabled();
   });
 
+  // test clear button functionality
   test('clear button resets all form fields', () => {
     renderWithRouter(<SignatureVerifier />);
     
@@ -103,6 +112,7 @@ describe('SignatureVerifier Component', () => {
     expect(signatureInput.value).toBe('');
   });
 
+  // test valid signature verification
   test('shows success message for valid signature', async () => {
     const { verifySignature } = require('../../utils/crypto');
     verifySignature.mockReturnValue(true);
@@ -126,6 +136,7 @@ describe('SignatureVerifier Component', () => {
     });
   });
 
+  // test invalid signature verification
   test('shows error message for invalid signature', async () => {
     const { verifySignature } = require('../../utils/crypto');
     verifySignature.mockReturnValue(false);
