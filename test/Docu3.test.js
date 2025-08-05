@@ -1,9 +1,12 @@
+// imports
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("Docu3 Contract", function () {
+// DocumentSign Contract tests
+describe("DocumentSign Contract", function () {
   let DocumentSign, documentSign, owner, signer1, signer2, nonSigner;
 
+  // setup before each test
   beforeEach(async function () {
     [owner, signer1, signer2, nonSigner] = await ethers.getSigners();
     DocumentSign = await ethers.getContractFactory("DocumentSign");
@@ -11,7 +14,9 @@ describe("Docu3 Contract", function () {
     await documentSign.waitForDeployment();
   });
 
+  // User Registration tests
   describe("User Registration", function () {
+    // test new user registration
     it("should register a new user", async function () {
       const firstName = "John";
       const familyName = "Doe";
@@ -32,6 +37,7 @@ describe("Docu3 Contract", function () {
       expect(profile.publicKey).to.equal(publicKey);
     });
 
+    // test duplicate registration prevention
     it("should prevent duplicate registration", async function () {
       const userData = ["John", "Doe", "john@example.com", Math.floor(Date.now() / 1000), "0x123"];
       
@@ -42,6 +48,7 @@ describe("Docu3 Contract", function () {
       ).to.be.revertedWith("Already registered");
     });
 
+    // test duplicate email prevention
     it("should prevent duplicate email registration", async function () {
       const email = "john@example.com";
       const userData1 = ["John", "Doe", email, Math.floor(Date.now() / 1000), "0x123"];
@@ -54,6 +61,7 @@ describe("Docu3 Contract", function () {
       ).to.be.revertedWith("Email already registered");
     });
 
+    // test user registered event emission
     it("should emit UserRegistered event", async function () {
       const userData = ["John", "Doe", "john@example.com", Math.floor(Date.now() / 1000), "0x123"];
       
@@ -63,7 +71,9 @@ describe("Docu3 Contract", function () {
     });
   });
 
+  // Document Creation tests
   describe("Document Creation", function () {
+    // test document creation with valid input
     it("should create a document with valid input", async function () {
       const signers = [signer1.address, signer2.address];
       const ipfsHash = "QmHash123";
@@ -84,16 +94,19 @@ describe("Docu3 Contract", function () {
       expect(doc.isRevoked).to.be.false;
     });
 
+    // test empty IPFS hash validation
     it("should revert if IPFS hash is empty", async function () {
       await expect(documentSign.createDocument("", [signer1.address], 0))
         .to.be.revertedWith("IPFS hash required");
     });
 
+    // test empty signers validation
     it("should revert if no signers provided", async function () {
       await expect(documentSign.createDocument("QmHash", [], 0))
         .to.be.revertedWith("At least one signer required");
     });
 
+    // test owner as signer
     it("should allow owner to be a signer", async function () {
       const tx = await documentSign.createDocument("QmHash", [owner.address], 0);
       const receipt = await tx.wait();
@@ -106,12 +119,14 @@ describe("Docu3 Contract", function () {
       expect(doc.creator).to.equal(owner.address);
     });
 
+    // test past expiry validation
     it("should revert if expiry is in the past", async function () {
       const pastExpiry = Math.floor(Date.now() / 1000) - 3600;
       await expect(documentSign.createDocument("QmHash", [signer1.address], pastExpiry))
         .to.be.revertedWith("Expiry must be in the future");
     });
 
+    // test future expiry document creation
     it("should create document with future expiry", async function () {
       const futureExpiry = Math.floor(Date.now() / 1000) + 3600;
       const signers = [signer1.address];
@@ -123,16 +138,19 @@ describe("Docu3 Contract", function () {
     });
   });
 
+  // Document Signing tests
   describe("Document Signing", function () {
     let docId;
     const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
 
+    // setup document for signing tests
     beforeEach(async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address, signer2.address], 0);
       const receipt = await tx.wait();
       docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
     });
 
+    // test document signing with signature
     it("should allow a signer to sign with signature", async function () {
       await expect(documentSign.connect(signer1).signDocument(docId, testSignature))
         .to.emit(documentSign, "DocumentSigned")
@@ -145,6 +163,7 @@ describe("Docu3 Contract", function () {
       expect(doc.signatureCount).to.equal(1);
     });
 
+    // test legacy signing without signature
     it("should allow legacy signing without signature", async function () {
       await expect(documentSign.connect(signer1).signDocumentLegacy(docId))
         .to.emit(documentSign, "DocumentSigned")
@@ -154,23 +173,27 @@ describe("Docu3 Contract", function () {
       expect(await documentSign.getSignature(docId, signer1.address)).to.equal("");
     });
 
+    // test double signing prevention
     it("should not allow double signing", async function () {
       await documentSign.connect(signer1).signDocument(docId, testSignature);
       await expect(documentSign.connect(signer1).signDocument(docId, testSignature))
         .to.be.revertedWith("Already signed");
     });
 
+    // test unauthorized signing prevention
     it("should not allow non-signer to sign", async function () {
       await expect(documentSign.connect(nonSigner).signDocument(docId, testSignature))
         .to.be.revertedWith("Not authorized signer");
     });
 
+    // test revoked document signing prevention
     it("should not allow signing a revoked document", async function () {
       await documentSign.revokeDocument(docId, "Revoked");
       await expect(documentSign.connect(signer1).signDocument(docId, testSignature))
         .to.be.revertedWith("Document is revoked");
     });
 
+    // test expired document signing prevention
     it("should not allow signing expired document", async function () {
       const currentTime = await ethers.provider.getBlock("latest").then(block => block.timestamp);
       const futureExpiry = currentTime + 10;
@@ -185,11 +208,13 @@ describe("Docu3 Contract", function () {
         .to.be.revertedWith("Document expired");
     });
 
+    // test signature parameter requirement
     it("should require signature parameter", async function () {
       await expect(documentSign.connect(signer1).signDocument(docId, ""))
         .to.be.revertedWith("Signature required");
     });
 
+    // test sequential signing enforcement
     it("should enforce sequential signing", async function () {
       await expect(documentSign.connect(signer2).signDocument(docId, testSignature))
         .to.be.revertedWith("Not your turn to sign");
@@ -202,16 +227,19 @@ describe("Docu3 Contract", function () {
     });
   });
 
+  // Document Revocation tests
   describe("Document Revocation", function () {
     let docId;
     const revokeReason = "Document revoked by creator";
 
+    // setup document for revocation tests
     beforeEach(async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address], 0);
       const receipt = await tx.wait();
       docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
     });
 
+    // test owner revocation
     it("should allow owner to revoke", async function () {
       await expect(documentSign.revokeDocument(docId, revokeReason))
         .to.emit(documentSign, "DocumentRevoked")
@@ -221,11 +249,13 @@ describe("Docu3 Contract", function () {
       expect(doc.isRevoked).to.be.true;
     });
 
+    // test non-owner revocation prevention
     it("should not allow non-owner to revoke", async function () {
       await expect(documentSign.connect(signer1).revokeDocument(docId, revokeReason))
         .to.be.revertedWith("Not document owner");
     });
 
+    // test double revocation prevention
     it("should not allow revoking twice", async function () {
       await documentSign.revokeDocument(docId, revokeReason);
       await expect(documentSign.revokeDocument(docId, revokeReason))
@@ -233,15 +263,18 @@ describe("Docu3 Contract", function () {
     });
   });
 
+  // Document Amendment tests
   describe("Document Amendment", function () {
     let docId;
 
+    // setup document for amendment tests
     beforeEach(async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address, signer2.address], 0);
       const receipt = await tx.wait();
       docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
     });
 
+    // test amendment before all signatures
     it("should allow owner to amend before all signatures", async function () {
       const newIpfsHash = "QmNewHash";
       const newExpiry = 0;
@@ -254,6 +287,7 @@ describe("Docu3 Contract", function () {
       expect(doc.ipfsHash).to.equal(newIpfsHash);
     });
 
+    // test amendment after all signatures prevention
     it("should not allow amendment after all signatures", async function () {
       await documentSign.connect(signer1).signDocument(docId, "0x123");
       await documentSign.connect(signer2).signDocument(docId, "0x456");
@@ -262,17 +296,20 @@ describe("Docu3 Contract", function () {
         .to.be.revertedWith("Cannot amend fully signed document");
     });
 
+    // test non-owner amendment prevention
     it("should not allow non-owner to amend", async function () {
       await expect(documentSign.connect(signer1).amendDocument(docId, "QmNewHash", 0))
         .to.be.revertedWith("Not document owner");
     });
 
+    // test revoked document amendment prevention
     it("should not allow amendment of revoked document", async function () {
       await documentSign.revokeDocument(docId, "Revoked");
       await expect(documentSign.amendDocument(docId, "QmNewHash", 0))
         .to.be.revertedWith("Document is revoked");
     });
 
+    // test expired document amendment prevention
     it("should not allow amendment of expired document", async function () {
       const currentTime = await ethers.provider.getBlock("latest").then(block => block.timestamp);
       const futureExpiry = currentTime + 10;
@@ -287,15 +324,18 @@ describe("Docu3 Contract", function () {
         .to.be.revertedWith("Document expired");
     });
 
+    // test valid IPFS hash requirement for amendment
     it("should require valid IPFS hash for amendment", async function () {
       await expect(documentSign.amendDocument(docId, "", 0))
         .to.be.revertedWith("IPFS hash required");
     });
   });
 
+  // Signature Verification tests
   describe("Signature Verification", function () {
     let docId;
 
+    // setup document for verification tests
     beforeEach(async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address], 0);
       const receipt = await tx.wait();
@@ -303,6 +343,7 @@ describe("Docu3 Contract", function () {
       await documentSign.connect(signer1).signDocument(docId, "0x123");
     });
 
+    // test valid signature verification
     it("should verify valid signature", async function () {
       const documentHash = ethers.keccak256(ethers.toUtf8Bytes("test document"));
       const messageHash = ethers.keccak256(
@@ -315,6 +356,7 @@ describe("Docu3 Contract", function () {
       expect(isValid).to.be.true;
     });
 
+    // test invalid signature rejection
     it("should reject invalid signature", async function () {
       const documentHash = ethers.keccak256(ethers.toUtf8Bytes("test document"));
       const wrongSignature = "0x" + "1".repeat(64) + "1c";
@@ -327,6 +369,7 @@ describe("Docu3 Contract", function () {
       }
     });
 
+    // test non-signer signature rejection
     it("should reject signature from non-signer", async function () {
       const documentHash = ethers.keccak256(ethers.toUtf8Bytes("test document"));
       const signature = await signer2.signMessage(ethers.getBytes(documentHash));
@@ -335,6 +378,7 @@ describe("Docu3 Contract", function () {
         .to.be.revertedWith("Signer has not signed this document");
     });
 
+    // test invalid signature length rejection
     it("should reject invalid signature length", async function () {
       const documentHash = ethers.keccak256(ethers.toUtf8Bytes("test document"));
       const invalidSignature = "0x" + "1".repeat(32);
@@ -344,27 +388,32 @@ describe("Docu3 Contract", function () {
     });
   });
 
+  // Getters and Queries tests
   describe("Getters and Queries", function () {
     let docId;
 
+    // setup document for query tests
     beforeEach(async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address, signer2.address], 0);
       const receipt = await tx.wait();
       docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
     });
 
+    // test role retrieval
     it("should return correct role for owner and signers", async function () {
-      expect(await documentSign.getRole(docId, owner.address)).to.equal(1); // Owner
-      expect(await documentSign.getRole(docId, signer1.address)).to.equal(2); // Signer
-      expect(await documentSign.getRole(docId, nonSigner.address)).to.equal(0); // Unregistered
+      expect(await documentSign.getRole(docId, owner.address)).to.equal(1); // owner
+      expect(await documentSign.getRole(docId, signer1.address)).to.equal(2); // signer
+      expect(await documentSign.getRole(docId, nonSigner.address)).to.equal(0); // unregistered
     });
 
+    // test sign timestamp retrieval
     it("should return correct sign timestamp after signing", async function () {
       await documentSign.connect(signer1).signDocument(docId, "0x123");
       const ts = await documentSign.getSignTimestamp(docId, signer1.address);
       expect(ts).to.be.gt(0);
     });
 
+    // test current signer retrieval
     it("should return current signer correctly", async function () {
       let current = await documentSign.getCurrentSigner(docId);
       expect(current).to.equal(signer1.address);
@@ -378,12 +427,14 @@ describe("Docu3 Contract", function () {
       expect(current).to.equal(ethers.ZeroAddress);
     });
 
+    // test signer verification
     it("should check if user is signer", async function () {
       expect(await documentSign.isSigner(owner.address, docId)).to.be.true;
       expect(await documentSign.isSigner(signer1.address, docId)).to.be.true;
       expect(await documentSign.isSigner(nonSigner.address, docId)).to.be.false;
     });
 
+    // test registered users retrieval
     it("should return all registered users", async function () {
       await documentSign.connect(signer1).registerUser("John", "Doe", "john@example.com", Math.floor(Date.now() / 1000), "0x123");
       await documentSign.connect(signer2).registerUser("Jane", "Smith", "jane@example.com", Math.floor(Date.now() / 1000), "0x456");
@@ -394,7 +445,9 @@ describe("Docu3 Contract", function () {
     });
   });
 
+  // Document Expiry tests
   describe("Document Expiry", function () {
+    // test document expiry checking
     it("should check if document is expired", async function () {
       const currentTime = await ethers.provider.getBlock("latest").then(block => block.timestamp);
       const futureExpiry = currentTime + 10;
@@ -419,7 +472,9 @@ describe("Docu3 Contract", function () {
     });
   });
 
+  // Error Handling tests
   describe("Error Handling", function () {
+    // test non-existent document queries
     it("should handle non-existent document queries", async function () {
       await expect(documentSign.getDocument(999))
         .to.be.revertedWith("Document does not exist");
@@ -431,13 +486,16 @@ describe("Docu3 Contract", function () {
         .to.be.revertedWith("Document does not exist");
     });
 
+    // test unregistered user profile queries
     it("should handle unregistered user profile queries", async function () {
       await expect(documentSign.getUserProfile(nonSigner.address))
         .to.be.revertedWith("User not registered");
     });
   });
 
+  // Uploader as signer tests
   describe("Uploader as signer", function () {
+    // test owner as only signer
     it("should allow owner as the only signer", async function () {
       const tx = await documentSign.createDocument("QmHash", [owner.address], 0);
       const receipt = await tx.wait();
@@ -448,6 +506,8 @@ describe("Docu3 Contract", function () {
       expect(doc.signatureCount).to.equal(1);
       expect(doc.fullySigned).to.be.true;
     });
+    
+    // test owner as first signer
     it("should allow owner as the first signer", async function () {
       const tx = await documentSign.createDocument("QmHash", [owner.address, signer1.address, signer2.address], 0);
       const receipt = await tx.wait();
@@ -460,6 +520,8 @@ describe("Docu3 Contract", function () {
       expect(doc.signatureCount).to.equal(3);
       expect(doc.fullySigned).to.be.true;
     });
+    
+    // test owner as last signer
     it("should allow owner as the last signer", async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address, signer2.address, owner.address], 0);
       const receipt = await tx.wait();
@@ -472,6 +534,8 @@ describe("Docu3 Contract", function () {
       expect(doc.signatureCount).to.equal(3);
       expect(doc.fullySigned).to.be.true;
     });
+    
+    // test owner as middle signer
     it("should allow owner as a middle signer", async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address, owner.address, signer2.address], 0);
       const receipt = await tx.wait();
@@ -487,4 +551,5 @@ describe("Docu3 Contract", function () {
   });
 });
 
+// helper function for test assertions
 const anyValue = (v) => typeof v === "bigint" && v > 0; 
