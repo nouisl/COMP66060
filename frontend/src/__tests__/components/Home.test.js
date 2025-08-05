@@ -3,12 +3,14 @@ import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import Home from '../../components/Home';
 
+// mock react-moralis
 jest.mock('react-moralis', () => ({
   useMoralis: () => ({
     account: null
   })
 }));
 
+// helper function to render with router
 const renderWithRouter = (component) => {
   return render(
     <BrowserRouter>
@@ -18,6 +20,7 @@ const renderWithRouter = (component) => {
 };
 
 describe('Home Component', () => {
+  // test welcome message
   test('renders welcome message', () => {
     renderWithRouter(<Home />);
     
@@ -25,12 +28,14 @@ describe('Home Component', () => {
     expect(screen.getByText('Docu³')).toBeInTheDocument();
   });
 
+  // test main heading
   test('renders main heading', () => {
     renderWithRouter(<Home />);
     
     expect(screen.getByText(/The decentralized document signing platform/i)).toBeInTheDocument();
   });
 
+  // test get started link when not connected
   test('renders Get Started link when not connected', () => {
     renderWithRouter(<Home />);
     
@@ -38,6 +43,7 @@ describe('Home Component', () => {
     expect(screen.getByText('View Documents')).toBeInTheDocument();
   });
 
+  // test features section
   test('renders features section', () => {
     renderWithRouter(<Home />);
     
@@ -46,6 +52,7 @@ describe('Home Component', () => {
     expect(screen.getByText('Audit Trail')).toBeInTheDocument();
   });
 
+  // test how it works section
   test('renders how it works section', () => {
     renderWithRouter(<Home />);
     
