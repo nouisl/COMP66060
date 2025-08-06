@@ -26,6 +26,7 @@ function Dashboard() {
       const stats = await documentService.getStatsForUser(account);
       setStats(stats);
     } catch (err) {
+      // handle error silently - user will see empty stats
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -44,6 +45,7 @@ function Dashboard() {
           setStats(stats);
         }
       } catch (err) {
+        // handle error silently - user will see empty stats
       } finally {
         if (isMounted) {
           setLoading(false);
