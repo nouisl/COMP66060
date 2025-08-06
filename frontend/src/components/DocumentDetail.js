@@ -15,7 +15,7 @@ import {
   decryptDocument
 } from '../utils/crypto';
 import EthCrypto from 'eth-crypto';
-import TransactionVerifier from './TransactionVerifier';
+import TransactionVerifier from '../utils/transactionVerifier';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
 const CHAIN_ID = process.env.REACT_APP_CHAIN_ID || '80002';
@@ -754,15 +754,7 @@ function DocumentDetail() {
             </div>
           )}
           
-          {/* show expired badge if document has expired and not fully signed */}
-          {deadlineInfo && deadlineInfo.hasExpiry && (deadlineInfo.isExpired || (deadlineInfo.expiry && Math.floor(Date.now() / 1000) > deadlineInfo.expiry)) && !doc.fullySigned && (
-            <div className="mb-4 flex items-center gap-2">
-              <span className="inline-block bg-red-600 text-white px-4 py-1 rounded-full font-bold text-lg">Expired</span>
-              <span className="text-xs text-red-700" title="This document has expired and cannot be signed.">
-                (This document has expired and cannot be signed or amended.)
-              </span>
-            </div>
-          )}
+
           <h2 className="text-3xl font-bold mb-8 text-gray-900 text-center">Document Details</h2>
           {/* show document info and signers */}
           <div className="grid md:grid-cols-2 gap-8 mb-8">
@@ -775,7 +767,7 @@ function DocumentDetail() {
                   <div className="flex justify-between"><span className="font-semibold">Description:</span> <span title={metadata?.description}>{shortenMiddle(metadata?.description, 18, 8) || <span className="text-gray-400 italic">N/A</span>}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Creator:</span> <span title={doc.creator} className="font-mono flex items-center">{shortenMiddle(doc.creator, 10, 8)}<CopyButton value={doc.creator} /></span></div>
                   <div className="flex justify-between"><span className="font-semibold">IPFS Hash:</span> <span title={doc.ipfsHash} className="font-mono flex items-center">{shortenMiddle(doc.ipfsHash, 12, 12)}<CopyButton value={doc.ipfsHash} /></span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Status:</span> <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${doc.isRevoked ? 'bg-red-100 text-red-700' : doc.fullySigned ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : 'Pending'}</span></div>
+                  <div className="flex justify-between"><span className="font-semibold">Status:</span> <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${doc.isRevoked ? 'bg-red-100 text-red-700' : doc.fullySigned ? 'bg-green-100 text-green-700' : (deadlineInfo && deadlineInfo.hasExpiry && deadlineInfo.isExpired) ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : (deadlineInfo && deadlineInfo.hasExpiry && deadlineInfo.isExpired) ? 'Expired' : 'Pending'}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Signatures:</span> <span>{Number(doc.signatureCount) || 0}/{doc.signers?.length || 0}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Sign Deadline:</span> <span className={formatDeadlineInfo().className}>{formatDeadlineInfo().text}</span></div>
                 </div>
@@ -812,6 +804,11 @@ function DocumentDetail() {
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             <span className="w-2 h-2 bg-green-400 rounded-full mr-1"></span>
                             Signed
+                          </span>
+                        ) : (deadlineInfo && deadlineInfo.hasExpiry && deadlineInfo.isExpired) ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <span className="w-2 h-2 bg-red-400 rounded-full mr-1"></span>
+                            Expired
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
@@ -1037,6 +1034,11 @@ function DocumentDetail() {
                             <span className="w-2 h-2 bg-green-400 rounded-full mr-1"></span>
                             Signed
                           </span>
+                        ) : (deadlineInfo && deadlineInfo.hasExpiry && deadlineInfo.isExpired) ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <span className="w-2 h-2 bg-red-400 rounded-full mr-1"></span>
+                            Expired
+                          </span>
                         ) : (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                             <span className="w-2 h-2 bg-yellow-400 rounded-full mr-1"></span>
@@ -1089,24 +1091,18 @@ function DocumentDetail() {
                             Copy Verification
                           </button>
                           {signatureTransactions[signer] ? (
-                            <div className="space-y-2 pt-2">
-                              <TransactionVerifier 
-                                txHash={signatureTransactions[signer]} 
-                                action="Signature Transaction"
-                              />
-                              <a
-                                href={`https://amoy.polygonscan.com/tx/${signatureTransactions[signer]}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
-                                title="View signature transaction on PolygonScan"
-                              >
-                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                </svg>
-                                View on Chain
-                              </a>
-                            </div>
+                            <a
+                              href={`https://amoy.polygonscan.com/tx/${signatureTransactions[signer]}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                              title="View signature transaction on PolygonScan"
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              View on Chain
+                            </a>
                           ) : (
                             <div className="pt-2">
                               <a
