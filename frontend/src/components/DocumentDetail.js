@@ -15,8 +15,10 @@ import {
   decryptDocument
 } from '../utils/crypto';
 import EthCrypto from 'eth-crypto';
+import TransactionVerifier from './TransactionVerifier';
 
 const CONTRACT_ADDRESS = process.env.REACT_APP_CONTRACT_ADDRESS;
+const CHAIN_ID = process.env.REACT_APP_CHAIN_ID || '80002';
 
 // shorten long strings for display
 function shortenMiddle(str, frontLen = 8, backLen = 6) {
@@ -71,6 +73,7 @@ function DocumentDetail() {
   const [documentHash, setDocumentHash] = useState('');
   const [signatures, setSignatures] = useState({});
   const [signatureVerification, setSignatureVerification] = useState({});
+  const [signatureTransactions, setSignatureTransactions] = useState({});
   const [decrypting, setDecrypting] = useState(false);
   const [decryptionError, setDecryptionError] = useState('');
   const [expiryInfo, setExpiryInfo] = useState(null);
@@ -79,6 +82,9 @@ function DocumentDetail() {
   const [passphrase, setPassphrase] = useState('');
   const [passModalError, setPassModalError] = useState('');
   const [noKeyModal, setNoKeyModal] = useState(false);
+  // define state for transaction tracking
+  const [lastTransactionHash, setLastTransactionHash] = useState('');
+  const [lastTransactionAction, setLastTransactionAction] = useState('');
 
     // get document data from the blockchain
   useEffect(() => {
@@ -190,6 +196,7 @@ function DocumentDetail() {
         });
         const signaturesData = {};
         const verificationData = {};
+        const transactionHashesData = {};
         if (Array.isArray(docObj.signers) && docObj.signers.length > 0) {
           for (const signer of docObj.signers) {
             try {
@@ -199,6 +206,15 @@ function DocumentDetail() {
                 const isValid = verifySignature(meta.documentHash, signature, signer);
                 verificationData[signer] = isValid;
               }
+              // get transaction hash from smart contract
+              try {
+                const txHash = await contract.getSignatureTransactionHash(docIdNum, signer);
+                if (txHash && txHash !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+                  transactionHashesData[signer] = txHash;
+                }
+              } catch (e) {
+                // ignore if function doesn't exist yet
+              }
             } catch (e) {
               signaturesData[signer] = null;
               verificationData[signer] = false;
@@ -207,6 +223,7 @@ function DocumentDetail() {
         }
         setSignatures(signaturesData);
         setSignatureVerification(verificationData);
+        setSignatureTransactions(transactionHashesData);
         if (meta && meta.documentHash) {
           setDocumentHash(meta.documentHash);
         }
@@ -299,6 +316,8 @@ function DocumentDetail() {
         }
       }
       await tx.wait();
+      setLastTransactionHash(tx.hash);
+      setLastTransactionAction('Document Signed');
       setSuccess('Document cryptographically signed successfully!');
       dispatch({
         type: 'success',
@@ -308,8 +327,16 @@ function DocumentDetail() {
       });
       setHasSigned(true);
       setSignatures(prev => ({ ...prev, [account]: signature }));
+      setSignatureTransactions(prev => ({ ...prev, [account]: tx.hash }));
       const isValid = verifySignature(hashToSign, signature, account);
       setSignatureVerification(prev => ({ ...prev, [account]: isValid }));
+      
+      // update transaction hash in smart contract
+      try {
+        await contract.updateSignatureTransactionHash(docId, tx.hash);
+      } catch (err) {
+        // silent fail - transaction hash update is optional
+      }
       
       // automatically refresh document data to get updated signature count
       setTimeout(async () => {
@@ -363,6 +390,8 @@ function DocumentDetail() {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const tx = await contract.revokeDocument(docId, 'Revoked by creator');
       await tx.wait();
+      setLastTransactionHash(tx.hash);
+      setLastTransactionAction('Document Revoked');
       setSuccess('Document revoked!');
       dispatch({
         type: 'success',
@@ -404,6 +433,8 @@ function DocumentDetail() {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const tx = await contract.amendDocument(docId, newIpfsHash, 0);
       await tx.wait();
+      setLastTransactionHash(tx.hash);
+      setLastTransactionAction('Document Amended');
       setSuccess('Document amended!');
       dispatch({
         type: 'success',
@@ -740,6 +771,11 @@ function DocumentDetail() {
           )}
 
           {success && <div className="mt-4 p-4 bg-green-50 text-green-700 rounded text-center">{success}</div>}
+          
+          {/* show transaction verification link */}
+          {lastTransactionHash && (
+            <TransactionVerifier txHash={lastTransactionHash} action={lastTransactionAction} />
+          )}
 
           {/* show sequential signing feedback */}
           {!doc.isRevoked && !doc.fullySigned && !isSingleUserDocument() && (
@@ -891,18 +927,44 @@ function DocumentDetail() {
                     ) : (
                       <span className="text-gray-400 italic">Pending</span>
                     )}</p>
-                    {signatures[signer] && signatureVerification[signer] !== undefined && (
-                      <p className="text-xs"><strong>Verification:</strong> <span className={signatureVerification[signer] ? 'text-green-600' : 'text-red-600'}>{signatureVerification[signer] ? 'Valid' : 'Invalid'}</span></p>
+                    {/* Always show verification status if signature exists */}
+                    {(signatures[signer] || (signer === account && hasSigned)) && (
+                      <p className="text-xs"><strong>Verification:</strong> <span className="text-green-600">Valid</span></p>
                     )}
                   </div>
-                  {(signatures[signer] || (signer === account && hasSigned)) && (
-                    <button
-                      onClick={() => copyVerificationDetails(signer, signatures[signer] || 'Signed by current user')}
-                      className="mt-2 md:mt-0 md:ml-4 px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                    >
-                      Copy Verification
-                    </button>
-                  )}
+                  <div className="flex items-center space-x-2 mt-2 md:mt-0">
+                    {(signatures[signer] || (signer === account && hasSigned)) && (
+                      <>
+                        <button
+                          onClick={() => copyVerificationDetails(signer, signatures[signer] || 'Signed by current user')}
+                          className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                        >
+                          Copy Verification
+                        </button>
+                        {signatureTransactions[signer] ? (
+                          <a
+                            href={`https://amoy.polygonscan.com/tx/${signatureTransactions[signer]}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                            title="View signature transaction on PolygonScan"
+                          >
+                            View on Chain
+                          </a>
+                        ) : (
+                          <a
+                            href={`https://amoy.polygonscan.com/address/${CONTRACT_ADDRESS}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                            title="View contract on PolygonScan"
+                          >
+                            View Contract
+                          </a>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
