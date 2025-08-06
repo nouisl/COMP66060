@@ -85,8 +85,52 @@ function DocumentDetail() {
   // define state for transaction tracking
   const [lastTransactionHash, setLastTransactionHash] = useState('');
   const [lastTransactionAction, setLastTransactionAction] = useState('');
+  const [registeredUsers, setRegisteredUsers] = useState([]);
 
-    // get document data from the blockchain
+  // fetch registered users for email display
+  useEffect(() => {
+    const fetchRegisteredUsers = async () => {
+      if (!window.ethereum || !CONTRACT_ADDRESS) return;
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
+        
+        // check if getAllRegisteredUsers function exists in the contract
+        if (!contract.getAllRegisteredUsers) {
+          // function not available - set empty users list
+          setRegisteredUsers([]);
+          return;
+        }
+        
+        const addresses = await contract.getAllRegisteredUsers();
+        const users = [];
+        for (let addr of addresses) {
+          try {
+            const profile = await contract.getUserProfile(addr);
+            const [firstName, familyName, email, dob, isRegistered, publicKey] = profile;
+            if (isRegistered && email && typeof email === 'string') {
+              users.push({ address: addr, firstName, familyName, email: email.trim().toLowerCase() });
+            }
+                    } catch (err) {
+            // skip individual user profile errors - keep going
+          }
+        }
+        setRegisteredUsers(users);
+      } catch (err) {
+        // handle contract call errors
+        if (err.code === 'CALL_EXCEPTION') {
+          // contract function might not be implemented
+        } else {
+          // general error fetching users
+        }
+        setRegisteredUsers([]);
+      }
+    };
+
+    fetchRegisteredUsers();
+  }, [CONTRACT_ADDRESS]);
+
+  // get document data from the blockchain
   useEffect(() => {
     const fetchDoc = async () => {
       setLoading(true);
@@ -147,7 +191,9 @@ function DocumentDetail() {
                 meta = await metaRes.json();
                 break;
               }
-            } catch (e) {}
+            } catch (e) {
+              // skip failed metadata fetch - continue with next url
+            }
           }
           setMetadata(meta);
         } catch (e) {
@@ -316,8 +362,14 @@ function DocumentDetail() {
         }
       }
       await tx.wait();
-      setLastTransactionHash(tx.hash);
-      setLastTransactionAction('Document Signed');
+      
+      // validate transaction hash before setting it
+      if (tx.hash && tx.hash !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        setLastTransactionHash(tx.hash);
+        setLastTransactionAction('Document Signed');
+      } else {
+        throw new Error('Transaction failed - invalid transaction hash received');
+      }
       setSuccess('Document cryptographically signed successfully!');
       dispatch({
         type: 'success',
@@ -335,7 +387,7 @@ function DocumentDetail() {
       try {
         await contract.updateSignatureTransactionHash(docId, tx.hash);
       } catch (err) {
-        // silent fail - transaction hash update is optional
+        // skip transaction hash update - optional feature
       }
       
       // automatically refresh document data to get updated signature count
@@ -364,7 +416,7 @@ function DocumentDetail() {
             isRevoked: refreshedIsRevoked
           });
         } catch (err) {
-          // silent refresh error
+          // skip refresh error
         }
       }, 2000); // wait 2 seconds for blockchain to update
     } catch (err) {
@@ -390,8 +442,14 @@ function DocumentDetail() {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
       const tx = await contract.revokeDocument(docId, 'Revoked by creator');
       await tx.wait();
-      setLastTransactionHash(tx.hash);
-      setLastTransactionAction('Document Revoked');
+      
+      // validate transaction hash before setting it
+      if (tx.hash && tx.hash !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        setLastTransactionHash(tx.hash);
+        setLastTransactionAction('Document Revoked');
+      } else {
+        throw new Error('Transaction failed - invalid transaction hash received');
+      }
       setSuccess('Document revoked!');
       dispatch({
         type: 'success',
@@ -431,10 +489,16 @@ function DocumentDetail() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
-      const tx = await contract.amendDocument(docId, newIpfsHash, 0);
+      const tx = await contract.amendDocumentMetadata(docId, newIpfsHash);
       await tx.wait();
-      setLastTransactionHash(tx.hash);
-      setLastTransactionAction('Document Amended');
+      
+      // validate transaction hash before setting it
+      if (tx.hash && tx.hash !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        setLastTransactionHash(tx.hash);
+        setLastTransactionAction('Document Amended');
+      } else {
+        throw new Error('Transaction failed - invalid transaction hash received');
+      }
       setSuccess('Document amended!');
       dispatch({
         type: 'success',
@@ -605,15 +669,24 @@ function DocumentDetail() {
       return { text: 'Loading expiry...', className: 'text-gray-500' };
     }
     
-    // Check if expiry is set (either hasExpiry is true or expiry timestamp is non-zero)
+    // check if expiry is set (either hasExpiry is true or expiry timestamp is non-zero)
     const hasExpirySet = expiryInfo.hasExpiry || (expiryInfo.expiry && expiryInfo.expiry > 0);
     
     if (!hasExpirySet) {
       return { text: 'No expiry set', className: 'text-gray-500' };
     }
     
-    if (expiryInfo.isExpired) {
-      return { text: 'Expired', className: 'text-red-600 font-semibold' };
+    // additional check: if expiry timestamp exists and is in the past, consider it expired
+    const currentTime = Math.floor(Date.now() / 1000);
+    const isActuallyExpired = expiryInfo.expiry && currentTime > expiryInfo.expiry;
+    
+    if (expiryInfo.isExpired || isActuallyExpired) {
+      // show actual expiry date for expired documents
+      const expiryDate = new Date(expiryInfo.expiry * 1000);
+      return { 
+        text: `Expired on ${expiryDate.toLocaleDateString()} at ${expiryDate.toLocaleTimeString()}`, 
+        className: 'text-red-600 font-semibold' 
+      };
     }
     
     const days = Math.floor(expiryInfo.timeUntilExpiry / 86400);
@@ -662,18 +735,27 @@ function DocumentDetail() {
             </div>
           )}
           
-          {/* show expiry warning if document is close to expiring */}
-          {expiryInfo && expiryInfo.hasExpiry && !expiryInfo.isExpired && expiryInfo.timeUntilExpiry < 3600 && (
-            <div className="mb-4 flex items-center gap-2">
-              <span className="inline-block bg-red-500 text-white px-4 py-1 rounded-full font-bold text-lg">Expiring Soon</span>
-              <span className="text-xs text-red-700" title="This document will expire soon. Please sign it before it expires.">
-                (This document expires in less than 1 hour. Sign it quickly!)
-              </span>
+          {/* show expiry warning only if document is not fully signed and close to expiring */}
+          {expiryInfo && expiryInfo.hasExpiry && !expiryInfo.isExpired && expiryInfo.timeUntilExpiry < 3600 && expiryInfo.timeUntilExpiry > 0 && !doc.fullySigned && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0">
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-red-800">Document Expiring Soon</h3>
+                  <p className="text-sm text-red-700 mt-1">
+                    This document expires in {formatExpiryInfo().text.toLowerCase()}. Please sign it before it expires.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
           
-          {/* show expired badge if document has expired */}
-          {expiryInfo && expiryInfo.hasExpiry && expiryInfo.isExpired && (
+          {/* show expired badge if document has expired and not fully signed */}
+          {expiryInfo && expiryInfo.hasExpiry && (expiryInfo.isExpired || (expiryInfo.expiry && Math.floor(Date.now() / 1000) > expiryInfo.expiry)) && !doc.fullySigned && (
             <div className="mb-4 flex items-center gap-2">
               <span className="inline-block bg-red-600 text-white px-4 py-1 rounded-full font-bold text-lg">Expired</span>
               <span className="text-xs text-red-700" title="This document has expired and cannot be signed.">
@@ -689,14 +771,13 @@ function DocumentDetail() {
               <div className="bg-gray-50 rounded-lg p-6 shadow-sm">
                 <h3 className="text-lg font-semibold mb-4 text-blue-900">Document Information</h3>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="font-semibold">Document ID:</span> <span>{docId}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Title:</span> <span title={metadata?.title}>{shortenMiddle(metadata?.title, 18, 8) || <span className="text-gray-400 italic">N/A</span>}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Description:</span> <span title={metadata?.description}>{shortenMiddle(metadata?.description, 18, 8) || <span className="text-gray-400 italic">N/A</span>}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Creator:</span> <span title={doc.creator} className="font-mono flex items-center">{shortenMiddle(doc.creator, 10, 8)}<CopyButton value={doc.creator} /></span></div>
                   <div className="flex justify-between"><span className="font-semibold">IPFS Hash:</span> <span title={doc.ipfsHash} className="font-mono flex items-center">{shortenMiddle(doc.ipfsHash, 12, 12)}<CopyButton value={doc.ipfsHash} /></span></div>
                   <div className="flex justify-between"><span className="font-semibold">Status:</span> <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${doc.isRevoked ? 'bg-red-100 text-red-700' : doc.fullySigned ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : 'Pending'}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Signatures:</span> <span>{Number(doc.signatureCount) || 0}/{doc.signers?.length || 0}</span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Expiry:</span> <span className={formatExpiryInfo().className}>{formatExpiryInfo().text}</span></div>
+                  <div className="flex justify-between"><span className="font-semibold">Sign Deadline:</span> <span className={formatExpiryInfo().className}>{formatExpiryInfo().text}</span></div>
                 </div>
               </div>
             </div>
@@ -704,17 +785,40 @@ function DocumentDetail() {
               {/* show signers list */}
               <div className="bg-gray-50 rounded-lg p-6 shadow-sm">
                 <h3 className="text-lg font-semibold mb-4 text-blue-900">Signers</h3>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {doc.signers?.map((signer, index) => (
-                    <div key={signer} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
-                      <span className="font-mono text-xs break-all" title={signer}>{signer}</span>
+                    <div key={signer} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full font-semibold text-sm">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Signer {index + 1}</p>
+                          <p className="text-xs text-gray-500 font-mono" title={signer}>
+                            {shortenMiddle(signer, 12, 8)}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {(() => {
+                              if (signer === account) return 'You';
+                              if (!registeredUsers || !Array.isArray(registeredUsers)) return 'Registered User';
+                              const user = registeredUsers.find(u => u.address && u.address.toLowerCase() === signer.toLowerCase());
+                              return user && user.email ? user.email : 'Registered User';
+                            })()}
+                          </p>
+                        </div>
+                      </div>
                       <div className="flex items-center space-x-2">
                         {doc.fullySigned || (signer === account && hasSigned) || signatures[signer] ? (
-                          <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-700 text-xs font-semibold">Signed</span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <span className="w-2 h-2 bg-green-400 rounded-full mr-1"></span>
+                            Signed
+                          </span>
                         ) : (
-                          <span className="inline-block px-2 py-0.5 rounded bg-yellow-100 text-yellow-700 text-xs font-semibold">Pending</span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            <span className="w-2 h-2 bg-yellow-400 rounded-full mr-1"></span>
+                            Pending
+                          </span>
                         )}
-
                       </div>
                     </div>
                   ))}
@@ -901,68 +1005,127 @@ function DocumentDetail() {
 
           {/* show signatures section */}
           <div className="mt-8">
-            <h3 className="text-lg font-semibold mb-4 text-blue-900">Signatures</h3>
-            <div className="space-y-2">
-              {doc.signers?.map((signer) => (
-                <div key={signer} className="p-4 bg-gray-50 rounded-lg flex flex-col md:flex-row md:items-center md:justify-between border border-gray-200">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs"><strong>Signer:</strong> <span className="font-mono break-all" title={signer}>{signer}</span></p>
-                    <p className="text-xs"><strong>Signature:</strong> {signatures[signer] || (signer === account && hasSigned) ? (
-                      <span className="font-mono break-all" title={signatures[signer] || 'Signed by current user'}>
-                        {signatures[signer] ? (
-                          <>
-                            {formatSignature(signatures[signer])} 
-                            <CopyButton value={signatures[signer]} />
-                            <details className="mt-1">
-                              <summary className="text-xs text-blue-600 cursor-pointer">Show full signature</summary>
-                              <div className="text-xs font-mono break-all bg-gray-100 p-2 rounded mt-1">{signatures[signer]}</div>
+            <h3 className="text-xl font-bold mb-6 text-gray-900 border-b border-gray-200 pb-2">Signatures</h3>
+            <div className="space-y-4">
+              {doc.signers?.map((signer, index) => (
+                <div key={signer} className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="p-6">
+                    {/* Header with signer info and status */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full font-semibold text-sm">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Signer {index + 1}</p>
+                          <p className="text-xs text-gray-500 font-mono" title={signer}>
+                            {signer}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {(() => {
+                              if (signer === account) return 'You';
+                              if (!registeredUsers || !Array.isArray(registeredUsers)) return 'Registered User';
+                              const user = registeredUsers.find(u => u.address && u.address.toLowerCase() === signer.toLowerCase());
+                              return user && user.email ? user.email : 'Registered User';
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {(signatures[signer] || (signer === account && hasSigned)) ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <span className="w-2 h-2 bg-green-400 rounded-full mr-1"></span>
+                            Signed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            <span className="w-2 h-2 bg-yellow-400 rounded-full mr-1"></span>
+                            Pending
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Signature details */}
+                    {(signatures[signer] || (signer === account && hasSigned)) ? (
+                      <div className="space-y-3">
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs font-medium text-gray-700 mb-2">Signature Hash</p>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm font-mono text-gray-900 break-all">
+                              {signatures[signer] ? formatSignature(signatures[signer]) : 'Signed by current user'}
+                            </span>
+                            <CopyButton value={signatures[signer] || 'Signed by current user'} />
+                          </div>
+                          {signatures[signer] && (
+                            <details className="mt-2">
+                              <summary className="text-xs text-blue-600 cursor-pointer hover:text-blue-800 font-medium">
+                                Show full signature
+                              </summary>
+                              <div className="mt-2 p-3 bg-gray-100 rounded text-xs font-mono break-all text-gray-700">
+                                {signatures[signer]}
+                              </div>
                             </details>
-                          </>
-                        ) : (
-                          <>
-                            Signed <CopyButton value="Signed by current user" />
-                          </>
-                        )}
-                      </span>
+                          )}
+                        </div>
+
+                        {/* Verification status */}
+                        <div className="flex items-center space-x-2">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <span className="w-2 h-2 bg-green-400 rounded-full mr-1"></span>
+                            Verification: Valid
+                          </span>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center space-x-3 pt-2">
+                          <button
+                            onClick={() => copyVerificationDetails(signer, signatures[signer] || 'Signed by current user')}
+                            className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                          >
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            Copy Verification
+                          </button>
+                          {signatureTransactions[signer] ? (
+                            <a
+                              href={`https://amoy.polygonscan.com/tx/${signatureTransactions[signer]}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                              title="View signature transaction on PolygonScan"
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              View on Chain
+                            </a>
+                          ) : (
+                            <a
+                              href={`https://amoy.polygonscan.com/tx/${signatureTransactions && signatureTransactions[signer] ? signatureTransactions[signer] : '0x0000000000000000000000000000000000000000000000000000000000000000'}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                              title="View transaction on PolygonScan"
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              View Transaction
+                            </a>
+                          )}
+                        </div>
+                      </div>
                     ) : (
-                      <span className="text-gray-400 italic">Pending</span>
-                    )}</p>
-                    {/* Always show verification status if signature exists */}
-                    {(signatures[signer] || (signer === account && hasSigned)) && (
-                      <p className="text-xs"><strong>Verification:</strong> <span className="text-green-600">Valid</span></p>
-                    )}
-                  </div>
-                  <div className="flex items-center space-x-2 mt-2 md:mt-0">
-                    {(signatures[signer] || (signer === account && hasSigned)) && (
-                      <>
-                        <button
-                          onClick={() => copyVerificationDetails(signer, signatures[signer] || 'Signed by current user')}
-                          className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                        >
-                          Copy Verification
-                        </button>
-                        {signatureTransactions[signer] ? (
-                          <a
-                            href={`https://amoy.polygonscan.com/tx/${signatureTransactions[signer]}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
-                            title="View signature transaction on PolygonScan"
-                          >
-                            View on Chain
-                          </a>
-                        ) : (
-                          <a
-                            href={`https://amoy.polygonscan.com/address/${CONTRACT_ADDRESS}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
-                            title="View contract on PolygonScan"
-                          >
-                            View Contract
-                          </a>
-                        )}
-                      </>
+                      <div className="text-center py-4">
+                        <div className="text-gray-400 mb-2">
+                          <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <p className="text-sm text-gray-500">Awaiting signature</p>
+                      </div>
                     )}
                   </div>
                 </div>
