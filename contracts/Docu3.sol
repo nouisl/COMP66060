@@ -20,6 +20,7 @@ contract DocumentSign {
         mapping(address => bool) hasSigned; // track if user has signed
         mapping(address => uint256) signedAt; // timestamp when user signed
         mapping(address => string) signatures; // store user signatures
+        mapping(address => bytes32) signatureTransactionHashes; // store transaction hash for each signature
         uint256 createdAt; // document creation timestamp
         uint256 signatureCount; // count of signatures received
         bool isRevoked; // document revocation status
@@ -196,6 +197,18 @@ contract DocumentSign {
     // get user's signature for a document
     function getSignature(uint256 _docId, address _signer) external view returns (string memory) {
         return documents[_docId].signatures[_signer];
+    }
+
+    // get transaction hash for a signature
+    function getSignatureTransactionHash(uint256 _docId, address _signer) external view returns (bytes32) {
+        return documents[_docId].signatureTransactionHashes[_signer];
+    }
+
+    // update transaction hash for a signature (only by the signer)
+    function updateSignatureTransactionHash(uint256 _docId, bytes32 _transactionHash) external {
+        require(documents[_docId].exists, "Document does not exist");
+        require(documents[_docId].hasSigned[msg.sender], "You have not signed this document");
+        documents[_docId].signatureTransactionHashes[msg.sender] = _transactionHash;
     }
 
     // get full document info
