@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
-// DocumentSign contract for managing document signing and user registration
+/**
+ * @title DocumentSign
+ * @dev Decentralized document signing system with cryptographic verification
+ * @notice This contract manages document creation, signing, and user registration
+ * @author Docu3 Team
+ */
 contract DocumentSign {
     // define user roles in the system
     enum Role { Unregistered, Owner, Signer }
@@ -91,7 +96,13 @@ contract DocumentSign {
         _;
     }
 
-    // create new document with signers and expiry
+    /**
+     * @dev Creates a new document with specified signers and expiry
+     * @param _ipfsHash IPFS hash of the document metadata
+     * @param _signers Array of signer addresses
+     * @param _expiry Expiry timestamp (0 for no expiry)
+     * @return Document ID
+     */
     function createDocument(string memory _ipfsHash, address[] memory _signers, uint256 _expiry) external returns (uint256) {
         require(bytes(_ipfsHash).length > 0, "IPFS hash required");
         require(_expiry == 0 || _expiry > block.timestamp, "Expiry must be in the future");
@@ -127,7 +138,11 @@ contract DocumentSign {
         return doc.expiry != 0 && block.timestamp > doc.expiry;
     }
 
-    // sign document with cryptographic signature
+    /**
+     * @dev Signs a document with cryptographic signature
+     * @param _docId Document ID to sign
+     * @param _signature Cryptographic signature of the document hash
+     */
     function signDocument(uint256 _docId, string memory _signature) external onlySigner(_docId) notRevoked(_docId) {
         Document storage doc = documents[_docId];
         require(!isExpired(_docId), "Document expired");
@@ -157,7 +172,11 @@ contract DocumentSign {
         emit DocumentSigned(_docId, msg.sender, block.timestamp, "");
     }
 
-    // revoke document by owner
+    /**
+     * @dev Revokes a document by the document owner
+     * @param _docId Document ID to revoke
+     * @param _reason Reason for revocation
+     */
     function revokeDocument(uint256 _docId, string memory _reason) external onlyOwner(_docId) notRevoked(_docId) {
         Document storage doc = documents[_docId];
         doc.isRevoked = true;
@@ -243,7 +262,12 @@ contract DocumentSign {
         return documents[_docId].roles[_user];
     }
 
-    // amend document by owner, if not fully signed yet
+    /**
+     * @dev Amends a document by the document owner (only if not fully signed)
+     * @param _docId Document ID to amend
+     * @param _newIpfsHash New IPFS hash for the document
+     * @param _newExpiry New expiry timestamp (0 to keep current)
+     */
     function amendDocument(uint256 _docId, string memory _newIpfsHash, uint256 _newExpiry) external onlyOwner(_docId) notRevoked(_docId) {
         Document storage doc = documents[_docId];
         require(!isExpired(_docId), "Document expired");
@@ -307,7 +331,14 @@ contract DocumentSign {
         return recoveredSigner == _signer;
     }
 
-    // register new user
+    /**
+     * @dev Registers a new user with profile information
+     * @param firstName User's first name
+     * @param familyName User's family name
+     * @param email User's email address
+     * @param dob User's date of birth (timestamp)
+     * @param publicKey User's public key for encryption
+     */
     function registerUser(
         string memory firstName,
         string memory familyName,
