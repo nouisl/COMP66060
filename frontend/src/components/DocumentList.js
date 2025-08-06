@@ -27,7 +27,9 @@ function DocumentList() {
       try {
         const res = await fetch(url);
         if (res.ok) return await res.json();
-      } catch (e) {}
+      } catch (e) {
+        // skip failed metadata fetch - continue with next url
+      }
     }
     return null;
   }
@@ -49,12 +51,21 @@ function DocumentList() {
           let metadata = null;
           try {
             metadata = await fetchMetadata(doc.ipfsHash);
-          } catch (e) {}
+          } catch (e) {
+            // skip failed metadata fetch - continue with next document
+          }
           docsWithMetadata.push({ ...doc, _metadata: metadata });
         }
         setDocuments(docsWithMetadata);
       } catch (err) {
-        setError(err.message || 'Failed to fetch documents.');
+        // handle specific contract call errors
+        if (err.code === 'CALL_EXCEPTION') {
+          setError('Contract interaction failed. Please check your wallet connection and try again.');
+        } else if (err.message && err.message.includes('No wallet found')) {
+          setError('Please connect your wallet to view documents.');
+        } else {
+          setError(err.message || 'Failed to fetch documents. Please try again.');
+        }
       } finally {
         setLoading(false);
       }
