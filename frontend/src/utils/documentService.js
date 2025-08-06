@@ -26,6 +26,12 @@ class DocumentService {
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, provider);
+      
+      // Check if required functions exist
+      if (!contract.documentCount) {
+        throw new Error('Contract does not have documentCount function');
+      }
+      
       const count = await contract.documentCount();
       
       // fetch all documents
@@ -69,6 +75,7 @@ class DocumentService {
             docs.push(docObj);
           }
         } catch (docError) {
+          // skip individual document errors - keep going with other docs
           continue;
         }
       }
@@ -77,7 +84,14 @@ class DocumentService {
       this.lastFetch = now;
       return docs;
     } catch (error) {
-      throw error;
+      // Handle specific contract call errors
+      if (error.code === 'CALL_EXCEPTION') {
+        throw new Error('Contract interaction failed. Please check your wallet connection and contract address.');
+      } else if (error.message && error.message.includes('documentCount')) {
+        throw new Error('Contract does not support document listing. Please check your contract deployment.');
+      } else {
+        throw error;
+      }
     }
   }
 
