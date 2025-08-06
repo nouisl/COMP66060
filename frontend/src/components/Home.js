@@ -98,8 +98,8 @@ function Home() {
               <div className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
                 2
               </div>
-              <h3 className="font-semibold mb-2">Invite Signers</h3>
-              <p className="text-gray-600 text-sm">Send invitations to signers via email or wallet address</p>
+              <h3 className="font-semibold mb-2">Add Signers</h3>
+              <p className="text-gray-600 text-sm">Add signer addresses and set signing order</p>
             </div>
             <div className="text-center">
               <div className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
