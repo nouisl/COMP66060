@@ -32,6 +32,7 @@ function UserProfile() {
         const onChainAddress = account;
         setProfile({ firstName, familyName, email, dob, publicKey, onChainAddress });
       } catch (err) {
+        // handle profile fetch error silently
       } finally {
         setLoading(false);
       }
@@ -52,7 +53,8 @@ function UserProfile() {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const bal = await provider.getBalance(account);
         setBalance(ethers.formatEther(bal));
-      } catch {
+      } catch (err) {
+        // handle balance fetch error
         setBalance(null);
       }
     }
