@@ -18,7 +18,7 @@ function DocumentUpload() {
   const [description, setDescription] = useState('');
   const [signers, setSigners] = useState([{ email: '', error: '', address: '' }]);
   const [registeredUsers, setRegisteredUsers] = useState([]);
-  const [expiry, setExpiry] = useState('');
+  const [deadline, setDeadline] = useState('');
   const [uploading, setUploading] = useState(false);
   const [includeSelfAsSigner, setIncludeSelfAsSigner] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -172,13 +172,13 @@ function DocumentUpload() {
       }
       
       // validate document parameters
-      const expiryTimestamp = expiry ? Math.floor(new Date(expiry).getTime() / 1000) : 0;
+      const deadlineTimestamp = deadline ? Math.floor(new Date(deadline).getTime() / 1000) : 0;
       const validSigners = getValidSigners();
       
-      // validate expiry timestamp
+      // validate deadline timestamp
       
-      if (expiryTimestamp > 0 && expiryTimestamp <= Math.floor(Date.now() / 1000)) {
-        throw new Error('Expiry date must be in the future.');
+      if (deadlineTimestamp > 0 && deadlineTimestamp <= Math.floor(Date.now() / 1000)) {
+        throw new Error('Deadline date must be in the future.');
       }
       // allow single user signing - no minimum signer requirement
       if (validSigners.length === 0 && !includeSelfAsSigner) {
@@ -205,7 +205,7 @@ function DocumentUpload() {
       const maxRetries = 3;
       while (retryCount < maxRetries) {
         try {
-          createGasEstimate = await contract.createDocument.estimateGas(finalDirHash, validSigners, expiryTimestamp);
+          createGasEstimate = await contract.createDocument.estimateGas(finalDirHash, validSigners, deadlineTimestamp);
           try {
             const gasPrices = await fetchGasPrices();
             createGasConfig = getGasConfig(gasPrices, 'standard');
@@ -231,7 +231,7 @@ function DocumentUpload() {
       }
       
       // send transaction to blockchain
-      const createTx = await contract.createDocument(finalDirHash, validSigners, expiryTimestamp, {
+      const createTx = await contract.createDocument(finalDirHash, validSigners, deadlineTimestamp, {
         gasLimit: createGasEstimate * 150n / 100n,
         ...createGasConfig
       });
@@ -285,8 +285,8 @@ function DocumentUpload() {
           errorMessage = 'No valid signers found. At least one signer is required.';
         } else if (err.message && err.message.includes('Invalid signer address')) {
           errorMessage = 'One or more signer addresses are invalid.';
-        } else if (err.message && err.message.includes('Expiry must be in the future')) {
-          errorMessage = 'Expiry date must be in the future.';
+              } else if (err.message && err.message.includes('Expiry must be in the future')) {
+        errorMessage = 'Deadline date must be in the future.';
         } else if (err.message && err.message.includes('revert')) {
           errorMessage = `Smart contract reverted: ${err.message}`;
         } else if (err.message && err.message.includes('insufficient funds')) {
@@ -534,11 +534,11 @@ function DocumentUpload() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Expiry (optional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Deadline (optional)</label>
             <input
               type="datetime-local"
-              value={expiry}
-              onChange={e => setExpiry(e.target.value)}
+              value={deadline}
+              onChange={e => setDeadline(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>

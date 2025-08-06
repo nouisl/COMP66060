@@ -76,7 +76,7 @@ function DocumentDetail() {
   const [signatureTransactions, setSignatureTransactions] = useState({});
   const [decrypting, setDecrypting] = useState(false);
   const [decryptionError, setDecryptionError] = useState('');
-  const [expiryInfo, setExpiryInfo] = useState(null);
+  const [deadlineInfo, setDeadlineInfo] = useState(null);
   // define state for modals
   const [showPassModal, setShowPassModal] = useState(false);
   const [passphrase, setPassphrase] = useState('');
@@ -274,17 +274,17 @@ function DocumentDetail() {
           setDocumentHash(meta.documentHash);
         }
         
-        // get expiry information
+        // get deadline information
         try {
           const [expiry, isExpired, timeUntilExpiry, hasExpiry] = await contract.getDocumentExpiryInfo(docIdNum);
-          setExpiryInfo({
+          setDeadlineInfo({
             expiry: Number(expiry),
             isExpired,
             timeUntilExpiry: Number(timeUntilExpiry),
             hasExpiry
           });
         } catch (err) {
-          setExpiryInfo(null);
+          setDeadlineInfo(null);
         }
       } catch (err) {
         const errorMessage = err.message || 'Failed to fetch document.';
@@ -311,7 +311,7 @@ function DocumentDetail() {
       if (!window.ethereum) throw new Error('No wallet found');
       
       // check if document has expired
-      if (expiryInfo && expiryInfo.hasExpiry && expiryInfo.isExpired) {
+      if (deadlineInfo && deadlineInfo.hasExpiry && deadlineInfo.isExpired) {
         throw new Error('This document has expired and cannot be signed.');
       }
       const provider = new ethers.BrowserProvider(window.ethereum);
@@ -663,44 +663,44 @@ function DocumentDetail() {
     return doc && doc.signers && doc.signers.length === 1 && doc.creator === doc.signers[0];
   };
 
-  // format expiry information for display
-  const formatExpiryInfo = () => {
-    if (!expiryInfo) {
-      return { text: 'Loading expiry...', className: 'text-gray-500' };
+  // format deadline information for display
+  const formatDeadlineInfo = () => {
+    if (!deadlineInfo) {
+      return { text: 'Loading deadline...', className: 'text-gray-500' };
     }
     
-    // check if expiry is set (either hasExpiry is true or expiry timestamp is non-zero)
-    const hasExpirySet = expiryInfo.hasExpiry || (expiryInfo.expiry && expiryInfo.expiry > 0);
+    // check if deadline is set (either hasExpiry is true or expiry timestamp is non-zero)
+    const hasDeadlineSet = deadlineInfo.hasExpiry || (deadlineInfo.expiry && deadlineInfo.expiry > 0);
     
-    if (!hasExpirySet) {
-      return { text: 'No expiry set', className: 'text-gray-500' };
+    if (!hasDeadlineSet) {
+      return { text: 'No deadline set', className: 'text-gray-500' };
     }
     
     // additional check: if expiry timestamp exists and is in the past, consider it expired
     const currentTime = Math.floor(Date.now() / 1000);
-    const isActuallyExpired = expiryInfo.expiry && currentTime > expiryInfo.expiry;
+    const isActuallyExpired = deadlineInfo.expiry && currentTime > deadlineInfo.expiry;
     
-    if (expiryInfo.isExpired || isActuallyExpired) {
-      // show actual expiry date for expired documents
-      const expiryDate = new Date(expiryInfo.expiry * 1000);
+    if (deadlineInfo.isExpired || isActuallyExpired) {
+      // show actual deadline date for expired documents
+      const deadlineDate = new Date(deadlineInfo.expiry * 1000);
       return { 
-        text: `Expired on ${expiryDate.toLocaleDateString()} at ${expiryDate.toLocaleTimeString()}`, 
+        text: `Deadline passed on ${deadlineDate.toLocaleDateString()} at ${deadlineDate.toLocaleTimeString()}`, 
         className: 'text-red-600 font-semibold' 
       };
     }
     
-    const days = Math.floor(expiryInfo.timeUntilExpiry / 86400);
-    const hours = Math.floor((expiryInfo.timeUntilExpiry % 86400) / 3600);
-    const minutes = Math.floor((expiryInfo.timeUntilExpiry % 3600) / 60);
+    const days = Math.floor(deadlineInfo.timeUntilExpiry / 86400);
+    const hours = Math.floor((deadlineInfo.timeUntilExpiry % 86400) / 3600);
+    const minutes = Math.floor((deadlineInfo.timeUntilExpiry % 3600) / 60);
     
     if (days > 0) {
-      return { text: `Expires in ${days} day${days > 1 ? 's' : ''}`, className: 'text-yellow-600' };
+      return { text: `Deadline in ${days} day${days > 1 ? 's' : ''}`, className: 'text-yellow-600' };
     } else if (hours > 0) {
-      return { text: `Expires in ${hours} hour${hours > 1 ? 's' : ''}`, className: 'text-yellow-600' };
+      return { text: `Deadline in ${hours} hour${hours > 1 ? 's' : ''}`, className: 'text-yellow-600' };
     } else if (minutes > 0) {
-      return { text: `Expires in ${minutes} minute${minutes > 1 ? 's' : ''}`, className: 'text-red-600 font-semibold' };
+      return { text: `Deadline in ${minutes} minute${minutes > 1 ? 's' : ''}`, className: 'text-red-600 font-semibold' };
     } else {
-      return { text: 'Expires soon', className: 'text-red-600 font-semibold' };
+      return { text: 'Deadline soon', className: 'text-red-600 font-semibold' };
     }
   };
   // return document detail
@@ -735,8 +735,8 @@ function DocumentDetail() {
             </div>
           )}
           
-          {/* show expiry warning only if document is not fully signed and close to expiring */}
-          {expiryInfo && expiryInfo.hasExpiry && !expiryInfo.isExpired && expiryInfo.timeUntilExpiry < 3600 && expiryInfo.timeUntilExpiry > 0 && !doc.fullySigned && (
+          {/* show deadline warning only if document is not fully signed and close to expiring */}
+          {deadlineInfo && deadlineInfo.hasExpiry && !deadlineInfo.isExpired && deadlineInfo.timeUntilExpiry < 3600 && deadlineInfo.timeUntilExpiry > 0 && !doc.fullySigned && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
               <div className="flex items-center gap-3">
                 <div className="flex-shrink-0">
@@ -745,9 +745,9 @@ function DocumentDetail() {
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-red-800">Document Expiring Soon</h3>
+                  <h3 className="text-lg font-semibold text-red-800">Document Deadline Approaching</h3>
                   <p className="text-sm text-red-700 mt-1">
-                    This document expires in {formatExpiryInfo().text.toLowerCase()}. Please sign it before it expires.
+                    This document {formatDeadlineInfo().text.toLowerCase()}. Please sign it before the deadline.
                   </p>
                 </div>
               </div>
@@ -755,7 +755,7 @@ function DocumentDetail() {
           )}
           
           {/* show expired badge if document has expired and not fully signed */}
-          {expiryInfo && expiryInfo.hasExpiry && (expiryInfo.isExpired || (expiryInfo.expiry && Math.floor(Date.now() / 1000) > expiryInfo.expiry)) && !doc.fullySigned && (
+          {deadlineInfo && deadlineInfo.hasExpiry && (deadlineInfo.isExpired || (deadlineInfo.expiry && Math.floor(Date.now() / 1000) > deadlineInfo.expiry)) && !doc.fullySigned && (
             <div className="mb-4 flex items-center gap-2">
               <span className="inline-block bg-red-600 text-white px-4 py-1 rounded-full font-bold text-lg">Expired</span>
               <span className="text-xs text-red-700" title="This document has expired and cannot be signed.">
@@ -777,7 +777,7 @@ function DocumentDetail() {
                   <div className="flex justify-between"><span className="font-semibold">IPFS Hash:</span> <span title={doc.ipfsHash} className="font-mono flex items-center">{shortenMiddle(doc.ipfsHash, 12, 12)}<CopyButton value={doc.ipfsHash} /></span></div>
                   <div className="flex justify-between"><span className="font-semibold">Status:</span> <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${doc.isRevoked ? 'bg-red-100 text-red-700' : doc.fullySigned ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : 'Pending'}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Signatures:</span> <span>{Number(doc.signatureCount) || 0}/{doc.signers?.length || 0}</span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Sign Deadline:</span> <span className={formatExpiryInfo().className}>{formatExpiryInfo().text}</span></div>
+                  <div className="flex justify-between"><span className="font-semibold">Sign Deadline:</span> <span className={formatDeadlineInfo().className}>{formatDeadlineInfo().text}</span></div>
                 </div>
               </div>
             </div>
@@ -924,10 +924,10 @@ function DocumentDetail() {
             {!hasSigned && (isCurrentSigner || isSingleUserDocument()) && !doc.isRevoked && (
               <button
                 onClick={handleSign}
-                disabled={signing || (metadata?.file?.encrypted && !decryptedFileUrl) || doc.isRevoked || (expiryInfo && expiryInfo.hasExpiry && expiryInfo.isExpired)}
+                disabled={signing || (metadata?.file?.encrypted && !decryptedFileUrl) || doc.isRevoked || (deadlineInfo && deadlineInfo.hasExpiry && deadlineInfo.isExpired)}
                 title={
                   doc.isRevoked ? 'This document is revoked and cannot be signed.' :
-                  (expiryInfo && expiryInfo.hasExpiry && expiryInfo.isExpired) ? 'This document has expired and cannot be signed.' :
+                  (deadlineInfo && deadlineInfo.hasExpiry && deadlineInfo.isExpired) ? 'This document has expired and cannot be signed.' :
                   ''
                 }
                 className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
@@ -1089,31 +1089,39 @@ function DocumentDetail() {
                             Copy Verification
                           </button>
                           {signatureTransactions[signer] ? (
-                            <a
-                              href={`https://amoy.polygonscan.com/tx/${signatureTransactions[signer]}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
-                              title="View signature transaction on PolygonScan"
-                            >
-                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                              View on Chain
-                            </a>
+                            <div className="space-y-2 pt-2">
+                              <TransactionVerifier 
+                                txHash={signatureTransactions[signer]} 
+                                action="Signature Transaction"
+                              />
+                              <a
+                                href={`https://amoy.polygonscan.com/tx/${signatureTransactions[signer]}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                                title="View signature transaction on PolygonScan"
+                              >
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                                View on Chain
+                              </a>
+                            </div>
                           ) : (
-                            <a
-                              href={`https://amoy.polygonscan.com/tx/${signatureTransactions && signatureTransactions[signer] ? signatureTransactions[signer] : '0x0000000000000000000000000000000000000000000000000000000000000000'}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
-                              title="View transaction on PolygonScan"
-                            >
-                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                              View Transaction
-                            </a>
+                            <div className="pt-2">
+                              <a
+                                href={`https://amoy.polygonscan.com/address/${CONTRACT_ADDRESS}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                                title="View contract on PolygonScan"
+                              >
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                                View Contract
+                              </a>
+                            </div>
                           )}
                         </div>
                       </div>
