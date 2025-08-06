@@ -259,7 +259,7 @@ function DocumentDetail() {
                   transactionHashesData[signer] = txHash;
                 }
               } catch (e) {
-                // ignore if function doesn't exist yet
+                // ignore transaction hash fetch errors - may not be stored yet
               }
             } catch (e) {
               signaturesData[signer] = null;
@@ -385,7 +385,8 @@ function DocumentDetail() {
       
       // update transaction hash in smart contract
       try {
-        await contract.updateSignatureTransactionHash(docId, tx.hash);
+        const updateTx = await contract.updateSignatureTransactionHash(docId, tx.hash);
+        await updateTx.wait();
       } catch (err) {
         // skip transaction hash update - optional feature
       }
@@ -767,7 +768,7 @@ function DocumentDetail() {
                   <div className="flex justify-between"><span className="font-semibold">Description:</span> <span title={metadata?.description}>{shortenMiddle(metadata?.description, 18, 8) || <span className="text-gray-400 italic">N/A</span>}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Creator:</span> <span title={doc.creator} className="font-mono flex items-center">{shortenMiddle(doc.creator, 10, 8)}<CopyButton value={doc.creator} /></span></div>
                   <div className="flex justify-between"><span className="font-semibold">IPFS Hash:</span> <span title={doc.ipfsHash} className="font-mono flex items-center">{shortenMiddle(doc.ipfsHash, 12, 12)}<CopyButton value={doc.ipfsHash} /></span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Status:</span> <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${doc.isRevoked ? 'bg-red-100 text-red-700' : doc.fullySigned ? 'bg-green-100 text-green-700' : (deadlineInfo && deadlineInfo.hasExpiry && deadlineInfo.isExpired) ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : (deadlineInfo && deadlineInfo.hasExpiry && deadlineInfo.isExpired) ? 'Expired' : 'Pending'}</span></div>
+                  <div className="flex justify-between"><span className="font-semibold">Status:</span> <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${doc.isRevoked ? 'bg-red-100 text-red-700' : doc.fullySigned ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : 'Incomplete'}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Signatures:</span> <span>{Number(doc.signatureCount) || 0}/{doc.signers?.length || 0}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Sign Deadline:</span> <span className={formatDeadlineInfo().className}>{formatDeadlineInfo().text}</span></div>
                 </div>
@@ -808,7 +809,7 @@ function DocumentDetail() {
                         ) : (deadlineInfo && deadlineInfo.hasExpiry && deadlineInfo.isExpired) ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                             <span className="w-2 h-2 bg-red-400 rounded-full mr-1"></span>
-                            Expired
+                            Overdue
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
@@ -880,10 +881,10 @@ function DocumentDetail() {
 
           {/* show sequential signing feedback */}
           {!doc.isRevoked && !doc.fullySigned && !isSingleUserDocument() && (
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h3 className="text-base font-semibold mb-2 text-blue-900">Signing Order</h3>
+            <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+              <h3 className="text-base font-semibold mb-2 text-yellow-900">Signing Process Incomplete</h3>
               {currentSignerAddress && (
-                <p className="text-sm text-blue-700 mb-2">
+                <p className="text-sm text-yellow-700 mb-2">
                   <strong>Current signer:</strong> {shortenMiddle(currentSignerAddress, 10, 8)} (Position {getCurrentSignerPosition()})
                 </p>
               )}
@@ -893,7 +894,7 @@ function DocumentDetail() {
                 </p>
               )}
               {!hasSigned && getUserPosition() === 0 && (
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-yellow-600">
                   You are not in the signing order for this document.
                 </p>
               )}
@@ -1037,7 +1038,7 @@ function DocumentDetail() {
                         ) : (deadlineInfo && deadlineInfo.hasExpiry && deadlineInfo.isExpired) ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                             <span className="w-2 h-2 bg-red-400 rounded-full mr-1"></span>
-                            Expired
+                            Overdue
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
@@ -1110,7 +1111,7 @@ function DocumentDetail() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                                title="View contract on PolygonScan"
+                                title="View contract on PolygonScan (transaction hash not available for this signature)"
                               >
                                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -1121,16 +1122,7 @@ function DocumentDetail() {
                           )}
                         </div>
                       </div>
-                    ) : (
-                      <div className="text-center py-4">
-                        <div className="text-gray-400 mb-2">
-                          <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        </div>
-                        <p className="text-sm text-gray-500">Awaiting signature</p>
-                      </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               ))}
