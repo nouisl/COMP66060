@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMoralis } from 'react-moralis';
 import { documentService } from '../utils/documentService';
+import { ethers } from 'ethers';
 
 // shorten long strings for display
 function truncateMiddle(str, frontLen = 8, backLen = 6) {
@@ -54,7 +55,24 @@ function DocumentList() {
           } catch (e) {
             // skip failed metadata fetch - continue with next document
           }
-          docsWithMetadata.push({ ...doc, _metadata: metadata });
+          
+          // fetch deadline information for each document
+          let deadlineInfo = null;
+          try {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const contract = new ethers.Contract(process.env.REACT_APP_CONTRACT_ADDRESS, require('../contracts/Docu3.json').abi, provider);
+            const [expiry, isExpired, timeUntilExpiry, hasExpiry] = await contract.getDocumentExpiryInfo(doc.docId);
+            deadlineInfo = {
+              expiry: Number(expiry),
+              isExpired,
+              timeUntilExpiry: Number(timeUntilExpiry),
+              hasExpiry
+            };
+          } catch (e) {
+            // skip deadline fetch errors
+          }
+          
+          docsWithMetadata.push({ ...doc, _metadata: metadata, _deadlineInfo: deadlineInfo });
         }
         setDocuments(docsWithMetadata);
       } catch (err) {
@@ -125,7 +143,7 @@ function DocumentList() {
                       </span>
                     ) : (
                       <span className="inline-block bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-bold">
-                        {doc.signers && doc.signers.length === 1 && doc.creator === doc.signers[0] ? 'Self-Sign' : 'Pending'}
+                        {doc.signers && doc.signers.length === 1 && doc.creator === doc.signers[0] ? 'Self-Sign' : 'Incomplete'}
                       </span>
                     )}
                     {doc._metadata && doc._metadata.previousVersion && (
