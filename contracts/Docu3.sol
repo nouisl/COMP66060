@@ -129,6 +129,9 @@ contract DocumentSign {
                 doc.roles[_signers[i]] = Role.Signer;
             }
         }
+        
+        // ensure creator is always the owner
+        doc.roles[msg.sender] = Role.Owner;
         emit DocumentCreated(documentCount, _ipfsHash, msg.sender, doc.signers, block.timestamp);
         return documentCount;
     }
@@ -300,6 +303,22 @@ contract DocumentSign {
         }
         doc.ipfsHash = _newIpfsHash;
         emit DocumentAmended(_docId, _newIpfsHash, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Amends only the title and description of a document (metadata only)
+     * @param _docId Document ID to amend
+     * @param _newMetadataIpfsHash New IPFS hash containing only updated metadata
+     */
+    function amendDocumentMetadata(uint256 _docId, string memory _newMetadataIpfsHash) external onlyOwner(_docId) notRevoked(_docId) {
+        Document storage doc = documents[_docId];
+        require(!isExpired(_docId), "Document expired");
+        require(bytes(_newMetadataIpfsHash).length > 0, "IPFS hash required");
+        
+        // for metadata-only amendments, we don't check if fully signed
+        // since it's just updating title/description, not the actual document
+        doc.ipfsHash = _newMetadataIpfsHash;
+        emit DocumentAmended(_docId, _newMetadataIpfsHash, msg.sender, block.timestamp);
     }
 
     // get current signer in sequence
