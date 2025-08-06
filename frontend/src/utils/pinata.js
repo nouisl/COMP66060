@@ -52,9 +52,7 @@ export async function uploadFolderToPinata(files) {
     });
     return res.data.IpfsHash;
   } catch (err) {
-    if (err.response) {
-      alert('Pinata error: ' + JSON.stringify(err.response.data));
-    }
-    throw err;
+    // handle pinata upload error
+    throw new Error(`Pinata upload failed: ${err.message}`);
   }
 }
