@@ -1,66 +1,42 @@
+// setupTests.js 
 import '@testing-library/jest-dom';
 
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: jest.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(),
+// mock window.ethereum
+Object.defineProperty(window, 'ethereum', {
+  value: {
+    request: jest.fn(),
+    on: jest.fn(),
     removeListener: jest.fn(),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
-});
-
-Object.defineProperty(window, 'crypto', {
+  },
   writable: true,
-  value: {
-    subtle: {
-      digest: jest.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])),
-      generateKey: jest.fn().mockResolvedValue({
-        exportKey: jest.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]))
-      }),
-      encrypt: jest.fn().mockResolvedValue(new ArrayBuffer(8)),
-      importKey: jest.fn().mockResolvedValue({}),
-      decrypt: jest.fn().mockResolvedValue(new ArrayBuffer(8)),
-      exportKey: jest.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]))
-    },
-    getRandomValues: jest.fn().mockReturnValue(new Uint8Array(12).fill(1))
-  }
 });
 
-Object.defineProperty(global, 'localStorage', {
-  writable: true,
-  value: {
-    getItem: jest.fn(),
-    setItem: jest.fn(),
-    removeItem: jest.fn(),
-    clear: jest.fn()
-  }
-});
+// mock process.env
+process.env.REACT_APP_CONTRACT_ADDRESS = '0x1234567890123456789012345678901234567890';
 
-jest.mock('@web3uikit/core', () => ({
-  useNotification: () => ({
-    dispatch: jest.fn()
-  })
+// mock console methods to avoid noise in tests
+global.console = {
+  ...console,
+  log: jest.fn(),
+  debug: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+};
+
+// mock fetch globally
+global.fetch = jest.fn();
+
+// mock ResizeObserver
+global.ResizeObserver = jest.fn().mockImplementation(() => ({
+  observe: jest.fn(),
+  unobserve: jest.fn(),
+  disconnect: jest.fn(),
 }));
 
-jest.mock('ethers', () => {
-  const mockEthers = {
-    keccak256: jest.fn().mockReturnValue('0xhash'),
-    toUtf8Bytes: jest.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
-    getBytes: jest.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
-    verifyMessage: jest.fn().mockReturnValue('0x1234567890123456789012345678901234567890'),
-    isHexString: jest.fn().mockReturnValue(true),
-    ZeroAddress: '0x0000000000000000000000000000000000000000',
-    BrowserProvider: jest.fn(),
-    Contract: jest.fn()
-  };
-  
-  return {
-    ethers: mockEthers,
-    ...mockEthers
-  };
-}); 
+// mock IntersectionObserver
+global.IntersectionObserver = jest.fn().mockImplementation(() => ({
+  observe: jest.fn(),
+  unobserve: jest.fn(),
+  disconnect: jest.fn(),
+})); 
