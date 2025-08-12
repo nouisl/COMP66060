@@ -86,13 +86,19 @@ describe("DocumentSign Security Tests", function () {
       ).to.be.revertedWith("IPFS hash required");
     });
 
-    // test empty signer list rejection
-    it("should reject empty signer lists", async function () {
+    // empty signer list now results in creator-only single-user doc
+    it("should create a creator-only document when signer list is empty", async function () {
       const ipfsHash = "QmHash123";
-      
-      await expect(
-        documentSign.createDocument(ipfsHash, [], 0)
-      ).to.be.revertedWith("At least one signer required");
+      const tx = await documentSign.createDocument(ipfsHash, [], 0);
+      const receipt = await tx.wait();
+      const event = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated");
+      expect(event).to.exist;
+      const docId = event.args.docId;
+
+      const doc = await documentSign.getDocument(docId);
+      expect(doc.creator).to.equal(owner.address);
+      expect(doc.signers.length).to.equal(1);
+      expect(doc.signers[0]).to.equal(owner.address);
     });
 
     // test invalid document ID for signing

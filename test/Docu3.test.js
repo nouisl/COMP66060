@@ -100,10 +100,21 @@ describe("DocumentSign Contract", function () {
         .to.be.revertedWith("IPFS hash required");
     });
 
-    // test empty signers validation
-    it("should revert if no signers provided", async function () {
-      await expect(documentSign.createDocument("QmHash", [], 0))
-        .to.be.revertedWith("At least one signer required");
+    // test empty signers now creates a single-user document (creator-only)
+    it("should create a single-user document when no signers provided", async function () {
+      const tx = await documentSign.createDocument("QmHash", [], 0);
+      const receipt = await tx.wait();
+      const event = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated");
+      expect(event).to.exist;
+      const docId = event.args.docId;
+
+      const doc = await documentSign.getDocument(docId);
+      expect(doc.creator).to.equal(owner.address);
+      expect(doc.signers.length).to.equal(1);
+      expect(doc.signers[0]).to.equal(owner.address);
+
+      const isSingle = await documentSign.isSingleUserDocument(docId);
+      expect(isSingle).to.be.true;
     });
 
     // test owner as signer
@@ -495,58 +506,38 @@ describe("DocumentSign Contract", function () {
 
   // Uploader as signer tests
   describe("Uploader as signer", function () {
-    // test owner as only signer
-    it("should allow owner as the only signer", async function () {
+    const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
+
+    // under new rules, creator is the owner and not an authorized signer by default
+    it("should not allow owner to sign even if listed as only signer", async function () {
       const tx = await documentSign.createDocument("QmHash", [owner.address], 0);
       const receipt = await tx.wait();
       const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
-      const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
-      await documentSign.signDocument(docId, testSignature);
-      const doc = await documentSign.getDocument(docId);
-      expect(doc.signatureCount).to.equal(1);
-      expect(doc.fullySigned).to.be.true;
+      await expect(documentSign.signDocument(docId, testSignature)).to.be.revertedWith("Not authorized signer");
     });
-    
-    // test owner as first signer
-    it("should allow owner as the first signer", async function () {
+
+    it("should not allow owner to sign when placed first among signers", async function () {
       const tx = await documentSign.createDocument("QmHash", [owner.address, signer1.address, signer2.address], 0);
       const receipt = await tx.wait();
       const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
-      const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
-      await documentSign.signDocument(docId, testSignature);
-      await documentSign.connect(signer1).signDocument(docId, testSignature);
-      await documentSign.connect(signer2).signDocument(docId, testSignature);
-      const doc = await documentSign.getDocument(docId);
-      expect(doc.signatureCount).to.equal(3);
-      expect(doc.fullySigned).to.be.true;
+      await expect(documentSign.signDocument(docId, testSignature)).to.be.revertedWith("Not authorized signer");
     });
-    
-    // test owner as last signer
-    it("should allow owner as the last signer", async function () {
+
+    it("should not allow owner to sign when placed last among signers", async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address, signer2.address, owner.address], 0);
       const receipt = await tx.wait();
       const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
-      const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
       await documentSign.connect(signer1).signDocument(docId, testSignature);
       await documentSign.connect(signer2).signDocument(docId, testSignature);
-      await documentSign.signDocument(docId, testSignature);
-      const doc = await documentSign.getDocument(docId);
-      expect(doc.signatureCount).to.equal(3);
-      expect(doc.fullySigned).to.be.true;
+      await expect(documentSign.signDocument(docId, testSignature)).to.be.revertedWith("Not authorized signer");
     });
-    
-    // test owner as middle signer
-    it("should allow owner as a middle signer", async function () {
+
+    it("should not allow owner to sign when placed in the middle of signers", async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address, owner.address, signer2.address], 0);
       const receipt = await tx.wait();
       const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
-      const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
       await documentSign.connect(signer1).signDocument(docId, testSignature);
-      await documentSign.signDocument(docId, testSignature);
-      await documentSign.connect(signer2).signDocument(docId, testSignature);
-      const doc = await documentSign.getDocument(docId);
-      expect(doc.signatureCount).to.equal(3);
-      expect(doc.fullySigned).to.be.true;
+      await expect(documentSign.signDocument(docId, testSignature)).to.be.revertedWith("Not authorized signer");
     });
   });
 });
