@@ -207,12 +207,18 @@ npx hardhat test test/Docu3.performance.test.js        # Performance and gas opt
 npx hardhat test test/Docu3.integration.test.js        # Integration and flow tests
 npx hardhat test test/Docu3.ipfs.integration.test.js   # IPFS integration tests
 
-# Run frontend tests
+# Run frontend tests (watch mode)
 cd frontend
 npm test
+
+# Run frontend tests non-interactively
+cd frontend
+CI=true npm test -- --watchAll=false
+
+# Run a single frontend test file
+cd frontend
+npm test -- src/__tests__/components/DocumentList.test.js
 ```
-
-
 
 ---
 
