@@ -1,6 +1,4 @@
-import { fetchGasPrices, testGasStation, getGasConfig } from '../../utils/gasStation';
-
-// mock ethers
+// mock ethers before importing the module under test
 jest.mock('ethers', () => ({
   ethers: {
     parseUnits: jest.fn().mockReturnValue('1000000000')
@@ -8,6 +6,11 @@ jest.mock('ethers', () => ({
 }));
 
 global.fetch = jest.fn();
+
+// import after mocks are set up
+import { fetchGasPrices, testGasStation, getGasConfig } from '../../utils/gasStation';
+import { ethers as mockedEthers } from 'ethers';
+
 
 describe('Gas Station Utils', () => {
   beforeEach(() => {
@@ -122,6 +125,15 @@ describe('Gas Station Utils', () => {
       };
 
       expect(() => getGasConfig(invalidGasPrices, 'standard')).toThrow('Invalid gas values for speed standard: maxFee=35, maxPriorityFee=-1');
+    });
+
+    // positive success path (standard)
+    test('returns gas config keys and calls parseUnits with expected args', () => {
+      const cfg = getGasConfig(mockGasPrices, 'standard');
+      expect(cfg).toHaveProperty('maxFeePerGas');
+      expect(cfg).toHaveProperty('maxPriorityFeePerGas');
+      expect(mockedEthers.parseUnits).toHaveBeenCalledWith('35', 'gwei');
+      expect(mockedEthers.parseUnits).toHaveBeenCalledWith('2', 'gwei');
     });
   });
 }); 
