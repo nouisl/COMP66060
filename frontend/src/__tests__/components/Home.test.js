@@ -58,6 +58,6 @@ describe('Home Component', () => {
     
     expect(screen.getByText('How It Works')).toBeInTheDocument();
     expect(screen.getByText('Upload Document')).toBeInTheDocument();
-    expect(screen.getByText('Invite Signers')).toBeInTheDocument();
+    expect(screen.getByText('Add Signers')).toBeInTheDocument();
   });
 }); 
