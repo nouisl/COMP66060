@@ -153,7 +153,6 @@ contract DocumentSign {
         require(!doc.hasSigned[msg.sender], "Already signed");
         require(doc.signers[doc.currentSignerIndex] == msg.sender, "Not your turn to sign");
         require(bytes(_signature).length > 0, "Signature required");
-        
         doc.hasSigned[msg.sender] = true;
         doc.signedAt[msg.sender] = block.timestamp;
         doc.signatures[msg.sender] = _signature;
@@ -332,7 +331,14 @@ contract DocumentSign {
         }
     }
 
-    // verify cryptographic signature
+    /**
+     * @dev Verifies a cryptographic signature for a document
+     * @param _docId Document ID to verify signature for
+     * @param _signer Address of the signer to verify
+     * @param _documentHash Hash of the document content
+     * @param _signature Cryptographic signature to verify
+     * @return True if signature is valid, false otherwise
+     */
     function verifySignature(
         uint256 _docId, 
         address _signer, 
@@ -342,9 +348,7 @@ contract DocumentSign {
         require(documents[_docId].exists, "Document does not exist");
         require(documents[_docId].hasSigned[_signer], "Signer has not signed this document");
         require(_signature.length == 65, "Invalid signature length");
-        
         bytes32 messageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _documentHash));
-        
         bytes32 r;
         bytes32 s;
         uint8 v;
@@ -357,9 +361,7 @@ contract DocumentSign {
         
         if (v < 27) v += 27;
         require(v == 27 || v == 28, "Invalid signature 'v' value");
-        
         address recoveredSigner = ecrecover(messageHash, v, r, s);
-        
         return recoveredSigner == _signer;
     }
 
