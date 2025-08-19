@@ -264,9 +264,8 @@ function DocumentUpload() {
         title: 'Success',
         position: 'topR',
       });
-      if (newDocId) {
-        navigate(`/documents/${newDocId}`);
-      }
+      // redirect to document list after successful upload
+      navigate('/documents');
     } catch (err) {
       // handle transaction rejection
       if (err.code === 4001 || (err.message && err.message.toLowerCase().includes('user denied'))) {
