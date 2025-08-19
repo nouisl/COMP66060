@@ -80,7 +80,7 @@ contract DocumentSign {
     // check if user is a signer
     modifier onlySigner(uint256 docId) {
         require(documents[docId].exists, "Document does not exist");
-        require(documents[docId].roles[msg.sender] == Role.Signer, "Not authorized signer");
+        require(documents[docId].roles[msg.sender] == Role.Signer || documents[docId].roles[msg.sender] == Role.Owner, "Not authorized signer");
         _;
     }
 

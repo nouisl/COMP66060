@@ -18,6 +18,7 @@ function DocumentList() {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
 
   // get metadata from IPFS
   async function fetchMetadata(ipfsHash) {
