@@ -45,22 +45,16 @@ function TransactionVerifier({ txHash, action, className = "" }) {
 
   return (
     <div className={`mt-2 p-2 bg-blue-50 rounded border border-blue-200 ${className}`}>
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-blue-700">
-          <strong>{action}:</strong> {shortenMiddle(txHash, 10, 8)}
-        </span>
-        <div className="flex items-center space-x-2">
-          <CopyButton value={txHash} />
-          <a
-            href={getExplorerUrl(txHash)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-            title="View on blockchain explorer"
-          >
-            View
-          </a>
-        </div>
+      <div className="flex items-center justify-end">
+        <a
+          href={getExplorerUrl(txHash)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+          title="View on blockchain explorer"
+        >
+          View on chain
+        </a>
       </div>
     </div>
   );

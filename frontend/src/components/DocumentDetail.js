@@ -257,6 +257,34 @@ function DocumentDetail() {
                 const txHash = await contract.getSignatureTransactionHash(docIdNum, signer);
                 if (txHash && txHash !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
                   transactionHashesData[signer] = txHash;
+                } else {
+                  // try to get transaction hash from blockchain events as fallback
+                  try {
+                    // query all DocumentSigned events for this document and signer
+                    const filter = contract.filters.DocumentSigned(docIdNum, signer);
+                    const events = await contract.queryFilter(filter);
+                    if (events && events.length > 0) {
+                      // get the most recent event for this signer
+                      const latestEvent = events[events.length - 1];
+                      transactionHashesData[signer] = latestEvent.transactionHash;
+                    } else {
+                      // if no specific events found, try to get any DocumentSigned event for this document
+                      const allEventsFilter = contract.filters.DocumentSigned(docIdNum);
+                      const allEvents = await contract.queryFilter(allEventsFilter);
+                      if (allEvents && allEvents.length > 0) {
+                        // find the event for this specific signer
+                        const signerEvent = allEvents.find(event => 
+                          event.args && event.args.signer && 
+                          event.args.signer.toLowerCase() === signer.toLowerCase()
+                        );
+                        if (signerEvent) {
+                          transactionHashesData[signer] = signerEvent.transactionHash;
+                        }
+                      }
+                    }
+                  } catch (eventError) {
+                    // ignore event query errors
+                  }
                 }
               } catch (e) {
                 // ignore transaction hash fetch errors - may not be stored yet
@@ -387,8 +415,12 @@ function DocumentDetail() {
       try {
         const updateTx = await contract.updateSignatureTransactionHash(docId, tx.hash);
         await updateTx.wait();
+        // also update local state immediately
+        setSignatureTransactions(prev => ({ ...prev, [account]: tx.hash }));
       } catch (err) {
         // skip transaction hash update - optional feature
+        // but still update local state
+        setSignatureTransactions(prev => ({ ...prev, [account]: tx.hash }));
       }
       
       // automatically refresh document data to get updated signature count
@@ -438,10 +470,19 @@ function DocumentDetail() {
   const handleRevoke = async () => {
     setRevoking(true);
     try {
+      // check if user is the document owner before attempting to revoke
+      if (doc.creator !== account) {
+        throw new Error('Only the document creator can revoke this document.');
+      }
+      
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, Docu3.abi, signer);
-      const tx = await contract.revokeDocument(docId, 'Revoked by creator');
+      
+      // try the transaction directly without gas estimation first
+      // ensure docId is converted to number for the contract call
+      const docIdNumber = Number(docId);
+      const tx = await contract.revokeDocument(docIdNumber, 'Revoked by creator');
       await tx.wait();
       
       // validate transaction hash before setting it
@@ -459,7 +500,25 @@ function DocumentDetail() {
         position: 'topR',
       });
     } catch (err) {
-      const errorMessage = err.message || 'Failed to revoke.';
+      let errorMessage = err.message || 'Failed to revoke.';
+      
+      // handle specific contract errors
+      if (errorMessage.toLowerCase().includes('not document owner')) {
+        errorMessage = 'Only the document creator can revoke this document.';
+      } else if (errorMessage.toLowerCase().includes('document is revoked')) {
+        errorMessage = 'This document is already revoked.';
+      } else if (errorMessage.toLowerCase().includes('document does not exist')) {
+        errorMessage = 'Document not found.';
+      } else if (errorMessage.toLowerCase().includes('internal json-rpc error') || errorMessage.toLowerCase().includes('transaction failed')) {
+        errorMessage = 'Transaction failed. Please check your wallet connection and try again.';
+      } else if (errorMessage.toLowerCase().includes('user rejected') || errorMessage.toLowerCase().includes('user denied')) {
+        errorMessage = 'Transaction was cancelled by user.';
+      } else if (errorMessage.toLowerCase().includes('insufficient funds')) {
+        errorMessage = 'Insufficient funds for transaction. Please check your wallet balance.';
+      } else if (errorMessage.toLowerCase().includes('gas')) {
+        errorMessage = 'Gas estimation failed. Please try again.';
+      }
+      
       setError(errorMessage);
       dispatch({
         type: 'error',
@@ -874,10 +933,6 @@ function DocumentDetail() {
 
           {success && <div className="mt-4 p-4 bg-green-50 text-green-700 rounded text-center">{success}</div>}
           
-          {/* show transaction verification link */}
-          {lastTransactionHash && (
-            <TransactionVerifier txHash={lastTransactionHash} action={lastTransactionAction} />
-          )}
 
           {/* show sequential signing feedback */}
           {!doc.isRevoked && !doc.fullySigned && !isSingleUserDocument() && (
