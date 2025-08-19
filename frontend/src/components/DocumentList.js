@@ -22,7 +22,14 @@ function DocumentList() {
   // get metadata from IPFS
   async function fetchMetadata(ipfsHash) {
     const urls = [
-      `https://ipfs.io/ipfs/${ipfsHash}/metadata.json`
+      `https://jade-voluntary-macaw-912.mypinata.cloud/ipfs/${ipfsHash}/docdir/metadata.json`,
+      `https://jade-voluntary-macaw-912.mypinata.cloud/ipfs/${ipfsHash}/metadata.json`
+      `https://ipfs.io/ipfs/${ipfsHash}/docdir/metadata.json`,
+      `https://ipfs.io/ipfs/${ipfsHash}/metadata.json`,
+      `https://cloudflare-ipfs.com/ipfs/${ipfsHash}/docdir/metadata.json`,
+      `https://cloudflare-ipfs.com/ipfs/${ipfsHash}/metadata.json`,
+      `https://gateway.pinata.cloud/ipfs/${ipfsHash}/docdir/metadata.json`,
+      `https://gateway.pinata.cloud/ipfs/${ipfsHash}/metadata.json`
     ];
     for (const url of urls) {
       try {
