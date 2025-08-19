@@ -508,36 +508,50 @@ describe("DocumentSign Contract", function () {
   describe("Uploader as signer", function () {
     const testSignature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1c";
 
-    // under new rules, creator is the owner and not an authorized signer by default
-    it("should not allow owner to sign even if listed as only signer", async function () {
+    // owner can sign if they are listed as a signer
+    it("should allow owner to sign when listed as only signer", async function () {
       const tx = await documentSign.createDocument("QmHash", [owner.address], 0);
       const receipt = await tx.wait();
       const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
-      await expect(documentSign.signDocument(docId, testSignature)).to.be.revertedWith("Not authorized signer");
+      await expect(documentSign.signDocument(docId, testSignature)).to.not.be.reverted;
     });
 
-    it("should not allow owner to sign when placed first among signers", async function () {
+    it("should allow owner to sign when placed first among signers", async function () {
       const tx = await documentSign.createDocument("QmHash", [owner.address, signer1.address, signer2.address], 0);
       const receipt = await tx.wait();
       const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
-      await expect(documentSign.signDocument(docId, testSignature)).to.be.revertedWith("Not authorized signer");
+      await expect(documentSign.signDocument(docId, testSignature)).to.not.be.reverted;
     });
 
-    it("should not allow owner to sign when placed last among signers", async function () {
+    it("should allow owner to sign when placed last among signers", async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address, signer2.address, owner.address], 0);
       const receipt = await tx.wait();
       const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
       await documentSign.connect(signer1).signDocument(docId, testSignature);
       await documentSign.connect(signer2).signDocument(docId, testSignature);
-      await expect(documentSign.signDocument(docId, testSignature)).to.be.revertedWith("Not authorized signer");
+      await expect(documentSign.signDocument(docId, testSignature)).to.not.be.reverted;
     });
 
-    it("should not allow owner to sign when placed in the middle of signers", async function () {
+    it("should allow owner to sign when placed in the middle of signers", async function () {
       const tx = await documentSign.createDocument("QmHash", [signer1.address, owner.address, signer2.address], 0);
       const receipt = await tx.wait();
       const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
       await documentSign.connect(signer1).signDocument(docId, testSignature);
-      await expect(documentSign.signDocument(docId, testSignature)).to.be.revertedWith("Not authorized signer");
+      await expect(documentSign.signDocument(docId, testSignature)).to.not.be.reverted;
+    });
+
+    it("should not allow owner to sign when not listed as a signer", async function () {
+      const tx = await documentSign.createDocument("QmHash", [signer1.address, signer2.address], 0);
+      const receipt = await tx.wait();
+      const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      await expect(documentSign.signDocument(docId, testSignature)).to.be.revertedWith("Not your turn to sign");
+    });
+
+    it("should allow owner to sign in single-user document (no signers provided)", async function () {
+      const tx = await documentSign.createDocument("QmHash", [], 0);
+      const receipt = await tx.wait();
+      const docId = receipt.logs.find(l => l.fragment && l.fragment.name === "DocumentCreated").args.docId;
+      await expect(documentSign.signDocument(docId, testSignature)).to.not.be.reverted;
     });
   });
 });
