@@ -138,10 +138,12 @@ function DocumentList() {
                       <span className="inline-block bg-red-600 text-white px-2 py-0.5 rounded-full text-xs font-bold" title="This document is revoked and cannot be changed.">Revoked</span>
                     ) : doc._metadata && doc._metadata.previousVersion ? (
                       <span className="inline-block bg-yellow-400 text-white px-2 py-0.5 rounded-full text-xs font-bold" title="This document is an amended version.">Amended</span>
-                    ) : doc.fullySigned ? (
+                    ) : doc.fullySigned || (doc.signatureCount > 0 && doc.signers && doc.signers.length === doc.signatureCount) ? (
                       <span className="inline-block bg-green-600 text-white px-2 py-0.5 rounded-full text-xs font-bold">
                         {doc.signers && doc.signers.length === 1 && doc.creator === doc.signers[0] ? 'Self-Signed' : 'Signed'}
                       </span>
+                    ) : doc._deadlineInfo && doc._deadlineInfo.hasExpiry && doc._deadlineInfo.isExpired ? (
+                      <span className="inline-block bg-red-500 text-white px-2 py-0.5 rounded-full text-xs font-bold" title="This document has expired and cannot be signed.">Overdue</span>
                     ) : (
                       <span className="inline-block bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-bold">
                         {doc.signers && doc.signers.length === 1 && doc.creator === doc.signers[0] ? 'Self-Sign' : 'Incomplete'}
