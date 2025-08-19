@@ -22,6 +22,7 @@ function UserRegistration() {
   const [pending, setPending] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const [networkStatus, setNetworkStatus] = useState('checking');
   const [passphrase, setPassphrase] = useState('');
@@ -138,6 +139,7 @@ function UserRegistration() {
       await tx.wait();
       setIsRegistered(true);
       setSuccess('Profile registered successfully! Redirecting...');
+      setIsRedirecting(true);
       dispatch({
         type: 'success',
         message: 'Profile registered successfully!',
@@ -177,6 +179,7 @@ function UserRegistration() {
       }
       if (msg.toLowerCase().includes('already registered')) {
         setSuccess('You are already registered with this wallet. Redirecting to homepage...');
+        setIsRedirecting(true);
         dispatch({
           type: 'info',
           message: 'You are already registered with this wallet. Redirecting to homepage...',
@@ -200,6 +203,7 @@ function UserRegistration() {
         msg = 'Registration failed. Please try again or check your wallet.';
       }
       setError(msg);
+      setIsRedirecting(false);
       dispatch({
         type: 'error',
         message: msg,
@@ -211,6 +215,9 @@ function UserRegistration() {
     } finally {
       setLoading(false);
       setPending(false);
+      if (!success) {
+        setIsRedirecting(false);
+      }
     }
   };
 
@@ -331,10 +338,10 @@ function UserRegistration() {
           {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded mb-2">{success}</div>}
           <button
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-            disabled={loading || pending || !walletConnected}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            disabled={loading || pending || isRedirecting || !walletConnected}
           >
-            {loading || pending ? 'Registering...' : 'Register'}
+            {loading || pending ? 'Registering...' : isRedirecting ? 'Redirecting...' : 'Register'}
           </button>
         </form>
       </div>
