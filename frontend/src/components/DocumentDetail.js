@@ -231,7 +231,7 @@ function DocumentDetail() {
         ] = await contract.getDocument(docIdNum);
         
         // update document with fresh data
-        setDoc({
+        const updatedDoc = {
           ipfsHash: refreshedIpfsHash,
           creator: refreshedCreator,
           signers: refreshedSigners,
@@ -239,7 +239,15 @@ function DocumentDetail() {
           signatureCount: refreshedSignatureCount,
           fullySigned: refreshedFullySigned,
           isRevoked: refreshedIsRevoked
-        });
+        };
+        setDoc(updatedDoc);
+        
+        // if document is revoked, update UI state immediately
+        if (refreshedIsRevoked) {
+          setHasSigned(false);
+          setIsCurrentSigner(false);
+          setCurrentSignerAddress('');
+        }
         const signaturesData = {};
         const verificationData = {};
         const transactionHashesData = {};
@@ -439,7 +447,7 @@ function DocumentDetail() {
             refreshedIsRevoked
           ] = await contract.getDocument(docIdNum);
           
-          setDoc({
+          const updatedDoc = {
             ipfsHash: refreshedIpfsHash,
             creator: refreshedCreator,
             signers: refreshedSigners,
@@ -447,7 +455,16 @@ function DocumentDetail() {
             signatureCount: refreshedSignatureCount,
             fullySigned: refreshedFullySigned,
             isRevoked: refreshedIsRevoked
-          });
+          };
+          
+          setDoc(updatedDoc);
+          
+          // if document is revoked, update UI state immediately
+          if (refreshedIsRevoked) {
+            setHasSigned(false);
+            setIsCurrentSigner(false);
+            setCurrentSignerAddress('');
+          }
         } catch (err) {
           // skip refresh error
         }
@@ -492,11 +509,18 @@ function DocumentDetail() {
       } else {
         throw new Error('Transaction failed - invalid transaction hash received');
       }
+      
+      // immediately update the document state to reflect revocation
+      setDoc(prevDoc => ({
+        ...prevDoc,
+        isRevoked: true
+      }));
+      
       setSuccess('Document revoked!');
       dispatch({
-        type: 'success',
+        type: 'error',
         message: 'Document revoked successfully!',
-        title: 'Success',
+        title: 'Document Revoked',
         position: 'topR',
       });
     } catch (err) {
@@ -776,13 +800,23 @@ function DocumentDetail() {
       {/* show document content */}
       {!loading && !error && doc && (
         <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-md p-8 mt-8">
-          {/* show revoked badge if document is revoked */}
+          {/* show revoked warning banner if document is revoked */}
           {doc.isRevoked && (
-            <div className="mb-4 flex items-center gap-2">
-              <span className="inline-block bg-red-600 text-white px-4 py-1 rounded-full font-bold text-lg">Revoked</span>
-              <span className="text-xs text-red-700" title="Revoked documents cannot be signed, amended, or revoked again. The data remains on IPFS, but the document is locked on-chain.">
-                (This document is locked and cannot be changed. Data remains accessible on IPFS.)
-              </span>
+            <div className="mb-6 p-6 bg-red-50 border-2 border-red-200 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0">
+                  <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-red-800 mb-1">Document Revoked</h3>
+                  <p className="text-red-700">
+                    This document has been revoked by the creator and is now locked. All actions (signing, amending, revoking) are disabled. 
+                    The document data remains accessible on IPFS for reference purposes.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
           {/* show amended badge if document is amended */}
@@ -827,7 +861,7 @@ function DocumentDetail() {
                   <div className="flex justify-between"><span className="font-semibold">Description:</span> <span title={metadata?.description}>{shortenMiddle(metadata?.description, 18, 8) || <span className="text-gray-400 italic">N/A</span>}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Creator:</span> <span title={doc.creator} className="font-mono flex items-center">{shortenMiddle(doc.creator, 10, 8)}<CopyButton value={doc.creator} /></span></div>
                   <div className="flex justify-between"><span className="font-semibold">IPFS Hash:</span> <span title={doc.ipfsHash} className="font-mono flex items-center">{shortenMiddle(doc.ipfsHash, 12, 12)}<CopyButton value={doc.ipfsHash} /></span></div>
-                  <div className="flex justify-between"><span className="font-semibold">Status:</span> <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${doc.isRevoked ? 'bg-red-100 text-red-700' : doc.fullySigned ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : 'Incomplete'}</span></div>
+                  <div className="flex justify-between"><span className="font-semibold">Status:</span> <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${doc.isRevoked ? 'bg-red-600 text-white' : doc.fullySigned ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{doc.isRevoked ? 'Revoked' : doc.fullySigned ? 'Fully Signed' : 'Incomplete'}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Signatures:</span> <span>{Number(doc.signatureCount) || 0}/{doc.signers?.length || 0}</span></div>
                   <div className="flex justify-between"><span className="font-semibold">Sign Deadline:</span> <span className={formatDeadlineInfo().className}>{formatDeadlineInfo().text}</span></div>
                 </div>
@@ -835,7 +869,18 @@ function DocumentDetail() {
             </div>
             <div>
               {/* show signers list */}
-              <div className="bg-gray-50 rounded-lg p-6 shadow-sm">
+              <div className={`bg-gray-50 rounded-lg p-6 shadow-sm relative ${doc.isRevoked ? 'opacity-60' : ''}`}>
+                {doc.isRevoked && (
+                  <div className="absolute inset-0 bg-red-50 bg-opacity-80 rounded-lg flex items-center justify-center z-10">
+                    <div className="text-center">
+                      <svg className="w-12 h-12 text-red-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                      <p className="text-red-800 font-bold text-lg">Document Revoked</p>
+                      <p className="text-red-700 text-sm">Signers are no longer active</p>
+                    </div>
+                  </div>
+                )}
                 <h3 className="text-lg font-semibold mb-4 text-blue-900">Signers</h3>
                 <div className="space-y-3">
                   {doc.signers?.map((signer, index) => (
@@ -860,7 +905,12 @@ function DocumentDetail() {
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        {doc.fullySigned || (signer === account && hasSigned) || signatures[signer] ? (
+                        {doc.isRevoked ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-600 text-white">
+                            <span className="w-2 h-2 bg-white rounded-full mr-1"></span>
+                            Revoked
+                          </span>
+                        ) : doc.fullySigned || (signer === account && hasSigned) || signatures[signer] ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             <span className="w-2 h-2 bg-green-400 rounded-full mr-1"></span>
                             Signed
@@ -931,7 +981,9 @@ function DocumentDetail() {
             </div>
           )}
 
-          {success && <div className="mt-4 p-4 bg-green-50 text-green-700 rounded text-center">{success}</div>}
+
+          
+
           
 
           {/* show sequential signing feedback */}
@@ -989,11 +1041,11 @@ function DocumentDetail() {
               </button>
             )}
             {/* amend and revoke buttons for uploader */}
-            {doc.creator === account && !doc.isRevoked && (
+            {doc.creator === account && (
               <>
                 <button
                   onClick={() => setShowAmendForm(!showAmendForm)}
-                  disabled={doc.isRevoked}
+                  disabled={amending || doc.isRevoked}
                   title={doc.isRevoked ? 'This document is revoked and cannot be amended.' : ''}
                   className="px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:bg-gray-400"
                 >
@@ -1085,7 +1137,12 @@ function DocumentDetail() {
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        {(signatures[signer] || (signer === account && hasSigned)) ? (
+                        {doc.isRevoked ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-600 text-white">
+                            <span className="w-2 h-2 bg-white rounded-full mr-1"></span>
+                            Revoked
+                          </span>
+                        ) : (signatures[signer] || (signer === account && hasSigned)) ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             <span className="w-2 h-2 bg-green-400 rounded-full mr-1"></span>
                             Signed
