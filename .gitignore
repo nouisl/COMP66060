@@ -3,3 +3,5 @@
 .DS_Store
 frontend/LIT_PROTOCOL_README.md
 frontend/SETUP.md
+artifacts/
+cache/
