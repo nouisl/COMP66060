@@ -54,6 +54,8 @@ First, create a `.env` file in the root directory for smart contract deployment:
 ```sh
 AMOY_RPC_URL=https://polygon-amoy.g.alchemy.com/v2/YOUR_API_KEY
 PRIVATE_KEY=your_wallet_private_key
+PINATA_API_KEY=your_pinata_api_key
+PINATA_API_SECRET=your_pinata_secret_key
 ```
 
 ### 4. Deploy Smart Contract
@@ -77,9 +79,9 @@ Create a `.env` file in the frontend directory with the deployed contract addres
 
 ```sh
 REACT_APP_CONTRACT_ADDRESS=your_deployed_contract_address
-CHAIN_ID=80002
+REACT_APP_CHAIN_ID=80002
 REACT_APP_PINATA_API_KEY=your_pinata_api_key
-REACT_APP_PINATA_SECRET_API_KEY=your_pinata_secret_key
+REACT_APP_PINATA_API_SECRET=your_pinata_secret_key
 ```
 
 ### 6. Start the Frontend
