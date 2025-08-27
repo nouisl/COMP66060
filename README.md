@@ -54,6 +54,8 @@ First, create a `.env` file in the root directory for smart contract deployment:
 ```sh
 AMOY_RPC_URL=https://polygon-amoy.g.alchemy.com/v2/YOUR_API_KEY
 PRIVATE_KEY=your_wallet_private_key
+PINATA_API_KEY=your_pinata_api_key
+PINATA_API_SECRET=your_pinata_secret_key
 ```
 
 ### 4. Deploy Smart Contract
@@ -116,7 +118,8 @@ COMP66060
  │   │   │   ├── crypto.js
  │   │   │   ├── documentService.js
  │   │   │   ├── gasStation.js
- │   │   │   └── pinata.js
+ │   │   │   ├── pinata.js
+ │   │   │   └── transactionVerifier.js
  │   │   ├── contracts
  │   │   │   └── Docu3.json
  │   │   └── App.js
