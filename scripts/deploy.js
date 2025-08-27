@@ -15,7 +15,7 @@ async function main() {
   console.log("Contract deployed successfully!");
   console.log("Please update your frontend environment variables:");
   console.log(`REACT_APP_CONTRACT_ADDRESS=${address}`);
-  console.log("REACT_APP_NETWORK_ID=80002");
+  console.log("REACT_APP_CHAIN_ID=80002");
   
   const contractArtifact = await hre.artifacts.readArtifact("DocumentSign");
   fs.writeFileSync(
