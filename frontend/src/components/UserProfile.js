@@ -175,7 +175,7 @@ function UserProfile() {
                       <p className="text-sm text-gray-700 text-center">Upload your encrypted key file or paste the key below to restore access on this device.</p>
                       <input
                         type="file"
-                        accept=".txt"
+                        accept=".txt,text/plain,*/*"
                         onChange={async e => {
                           const file = e.target.files[0];
                           if (!file) return;

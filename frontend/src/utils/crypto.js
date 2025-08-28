@@ -152,7 +152,7 @@ export function downloadEncryptedKey(userAddress) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `docu3_encrypted_key_${userAddress}.txt`;
+  a.download = `docu3_privateKey_${userAddress}`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
